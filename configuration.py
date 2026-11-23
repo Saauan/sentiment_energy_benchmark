@@ -397,8 +397,9 @@ def _validate_phase(name, phase, models):
                 raise ValueError(f"phases.{name}.{model_id} width {width} exceeds the in-memory prediction bound")
 
 
-def _document(config_path):
-    document = _mapping(load(config_path), "experiment")
+def validate_document(document):
+    """Validate an in-memory experiment document without writing a config file."""
+    document = _mapping(document, "experiment")
     _exact_keys(document, _TOP_KEYS, "experiment", required=_TOP_KEYS)
     if document["schema_version"] != 1 or isinstance(document["schema_version"], bool):
         raise ValueError("experiment.schema_version must be 1")
@@ -429,7 +430,7 @@ def configure(phase, config_path=DEFAULT_CONFIG):
     An absent key means the caller resolved a historical configuration: it stays
     usable for verification, and refusing to execute it is the runner's decision.
     """
-    document = _document(Path(config_path))
+    document = validate_document(load(Path(config_path)))
     if phase not in document["phases"]:
         raise ValueError(f"unknown phase {phase!r}; choose from {sorted(document['phases'])}")
     selected = document["phases"][phase]

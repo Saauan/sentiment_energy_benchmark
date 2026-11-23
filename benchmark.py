@@ -4,6 +4,8 @@
 ``plan`` and ``verify`` never construct an adapter or start a measurement. ``run``
 holds the project measurement lock for its whole lifetime. Completed attempts are
 immutable; interrupted and incomplete attempts are resumed in fresh directories.
+``run --progress`` streams opt-in progress lines on stderr between measurement
+operations; the single JSON report on stdout is unchanged.
 """
 from __future__ import annotations
 
@@ -17,7 +19,7 @@ import signal
 import sys
 import tempfile
 from time import perf_counter, sleep
-from typing import Any, Iterable
+from typing import Any, Iterable, TextIO
 
 import configuration
 import dataset
@@ -44,6 +46,84 @@ class SignalReceived(BaseException):
     def __init__(self, signum: int):
         self.signum = signum
         super().__init__(signal.Signals(signum).name)
+
+
+PROGRESS_PREFIX = "benchmark progress"
+
+
+def _progress_value(value: Any) -> str:
+    """Render one key=value token; quote any value that would not survive a token split.
+
+    Quoted values are JSON string literals (non-ASCII kept literal), so any
+    whitespace, line break, backslash, quote, or '=' inside a value can never
+    split or escape a progress line.
+    """
+    if isinstance(value, (list, tuple)):
+        value = ",".join(str(item) for item in value)
+    text = str(value)
+    if not text or any(character.isspace() or character in {'"', '=', '\\'} for character in text):
+        return json.dumps(text, ensure_ascii=False)
+    return text
+
+
+def _trial_fields(trial: dict) -> dict:
+    return {"run_id": trial["run_id"], "kind": trial["kind"], "model": trial["model"],
+            "rep": trial["rep"], "width": trial["batch_size"]}
+
+
+class Progress:
+    """Opt-in, synchronous progress reporting; disabled unless a stream is supplied.
+
+    Events are emitted only between measurement operations, never from inside an
+    energy capture window, so enabling progress adds no work to a measured window.
+    A broken stream disables reporting instead of failing an experiment.
+    """
+
+    def __init__(self, stream: TextIO | None = None):
+        self._stream = stream
+        self._reported: set[str] = set()
+
+    @property
+    def enabled(self) -> bool:
+        return self._stream is not None
+
+    def event(self, name: str, **fields: Any) -> None:
+        stream = self._stream
+        if stream is None:
+            return
+        parts = [PROGRESS_PREFIX, name]
+        parts.extend(f"{key}={_progress_value(value)}" for key, value in fields.items() if value is not None)
+        try:
+            stream.write(" ".join(parts) + "\n")
+            stream.flush()
+        except (OSError, ValueError):
+            self._stream = None
+
+    def report_outcomes(self, root: Path, trials: Iterable[dict], work: dict[str, int],
+                        total: int) -> dict[str, int]:
+        """Emit each failed/skipped/incomplete selected trial once, with its location."""
+        if not self.enabled:
+            # Historical default: no stream means no reporting and no state scans.
+            return {}
+        counts: dict[str, int] = {}
+        for trial in trials:
+            path = root / trial["run_id"] / "state.json"
+            state = None
+            if path.exists():
+                try:
+                    state = storage.load(path)
+                except (OSError, ValueError, KeyError, TypeError):
+                    state = None
+            status = state["status"] if state else "pending"
+            counts[status] = counts.get(status, 0) + 1
+            if (state is None or status not in {"incomplete", "failed", "skipped"}
+                    or trial["run_id"] in self._reported):
+                continue
+            self._reported.add(trial["run_id"])
+            self.event("outcome", work=work.get(trial["run_id"]), total=total, status=status,
+                       reason=state.get("reason"), active_attempt=state.get("active_attempt"),
+                       location=str(root / trial["run_id"]), **_trial_fields(trial))
+        return counts
 
 
 def _configure(phase: str, config_path: Path):
@@ -535,14 +615,23 @@ def _eligible(status: str, retry_failed: bool, retry_skipped: bool) -> bool:
 
 
 def select_trials(plan: dict, root: Path, *, model: str | None = None, kind: str | None = None,
-                  limit_new: int | None = None, retry_failed: bool = False,
-                  retry_skipped: bool = False) -> list[dict]:
+                  width: int | None = None, limit_new: int | None = None,
+                  retry_failed: bool = False, retry_skipped: bool = False) -> list[dict]:
+    """Select eligible planned trials in plan order, including shared dependencies.
+
+    ``width`` matches the planned model width (``batch_size``); ``0`` selects the
+    shared calibration/training rows. Sharing is a plan property: the selected
+    trial's same-session device idle, training, and same-width loaded idle are
+    still added, and the result keeps plan order (the seeded v2 session/width
+    order). ``limit_new`` is applied last, exactly as without ``width``.
+    """
     by_id = {trial["run_id"]: trial for trial in plan["trials"]}
     statuses = {trial["run_id"]: _state_status(root, trial) for trial in plan["trials"]}
     selected = {
         trial["run_id"] for trial in plan["trials"]
         if (model is None or trial["model"] == model)
         and (kind is None or trial["kind"] == kind)
+        and (width is None or trial["batch_size"] == width)
         and _eligible(statuses[trial["run_id"]], retry_failed, retry_skipped)
     }
     # Calibration/training dependencies precede inference in every block. Add
@@ -658,8 +747,21 @@ def _new_segment(root: Path, session: dict) -> tuple[Path, dict]:
 
 
 def _execute_session(root: Path, plan: dict, session: dict, selected: list[dict], data: tuple,
-                     stop_file: Path | None) -> str:
+                     stop_file: Path | None, *, progress: "Progress | None" = None,
+                     work: dict[str, int] | None = None) -> str:
     cfg, dataset_info, train, validation, panel, warmup = data
+    progress = progress if progress is not None else Progress()
+    if work is None:
+        work = {trial["run_id"]: index for index, trial in enumerate(selected, 1)}
+    total = len(work)
+
+    def starting(trial: dict) -> None:
+        progress.event("work-start", work=work[trial["run_id"]], total=total, **_trial_fields(trial))
+
+    def finished(trial: dict) -> None:
+        progress.event("work-done", work=work[trial["run_id"]], total=total,
+                       status="complete", **_trial_fields(trial))
+
     active: dict[str, storage.Run] = {}
     adapter = None
     segment_path = None
@@ -695,8 +797,10 @@ def _execute_session(root: Path, plan: dict, session: dict, selected: list[dict]
                 _skip(root, idle, "no supported selected width", receipt)
             else:
                 _check_stop(stop_file)
+                starting(idle)
                 _measure_idle(root, idle, cfg, dataset_info, plan["train_count"], _owned_snapshot(), active,
                               check_after=_owned_snapshot)
+                finished(idle)
         if not model_selected:
             return outcome
         # Do not consume new attempts for trials whose prerequisites are still missing.
@@ -718,6 +822,8 @@ def _execute_session(root: Path, plan: dict, session: dict, selected: list[dict]
         if reason:
             raise Unavailable(reason)
         segment_path, provenance = _new_segment(root, session)
+        progress.event("engine", state="start", model=session["model"], rep=session["rep"],
+                       segment=provenance["segment_id"])
         if spec["adapter"] == "vllm":
             # Capacity for the largest scheduled supported width; not the trial width.
             spec["submission_width"] = max(valid_widths)
@@ -730,9 +836,11 @@ def _execute_session(root: Path, plan: dict, session: dict, selected: list[dict]
         if training is not None:
             current = training
             _check_stop(stop_file)
+            starting(training)
             metadata = _measure_training(root, training, cfg, dataset_info, plan["train_count"],
                                          train, validation, _owned_snapshot(adapter), active, adapter, provenance,
                                          check_after=lambda: _owned_snapshot(adapter))
+            finished(training)
             outside_setup.update(setup_s=None, setup_measured_in=training["run_id"])
         else:
             started = perf_counter()
@@ -741,6 +849,8 @@ def _execute_session(root: Path, plan: dict, session: dict, selected: list[dict]
             outside_setup.update(setup_s=perf_counter() - started, setup_measured_in=None,
                                  previous_training_run_id=current.get("training_run_id"))
         setup_done = True
+        progress.event("engine", state="ready", model=session["model"], rep=session["rep"],
+                       segment=provenance["segment_id"], setup_s=outside_setup.get("setup_s"))
         _owned_snapshot(adapter)
         for width in session["widths"]:
             pair = [t for t in runnable if t["batch_size"] == width and t["kind"] in {"loaded_idle", "inference"}]
@@ -800,8 +910,10 @@ def _execute_session(root: Path, plan: dict, session: dict, selected: list[dict]
             if loaded is not None:
                 current = loaded
                 _check_stop(stop_file)
+                starting(loaded)
                 _measure_idle(root, loaded, cfg, dataset_info, plan["train_count"], _owned_snapshot(adapter), active, width_metadata,
                               check_after=lambda: _owned_snapshot(adapter))
+                finished(loaded)
                 _owned_snapshot(adapter)
             if inference is not None:
                 current = inference
@@ -809,9 +921,11 @@ def _execute_session(root: Path, plan: dict, session: dict, selected: list[dict]
                 # A completed loaded baseline may belong to a prior segment on resume.
                 baseline = _reference_result(root, inference.get("loaded_idle_run_id"))
                 width_metadata["loaded_idle_engine_session"] = (baseline or {}).get("adapter", {}).get("engine_session")
+                starting(inference)
                 _measure_inference(root, inference, cfg, dataset_info, plan["train_count"], panel,
                                    _owned_snapshot(adapter), active, adapter, width_metadata, outside,
                                    check_after=lambda: _owned_snapshot(adapter))
+                finished(inference)
                 _owned_snapshot(adapter)
         adapter.close()
         adapter = None
@@ -853,22 +967,37 @@ def _execute_session(root: Path, plan: dict, session: dict, selected: list[dict]
 
 
 def run_selected(root: Path, plan: dict, selected: list[dict], data: tuple,
-                 stop_file: Path | None = None) -> dict:
+                 stop_file: Path | None = None, progress: "Progress | None" = None) -> dict:
     if plan.get("format_version") != 2 or plan.get("execution_protocol") != "engine-session-v1":
         raise ValueError("archived format-1 plans are read/verify only; execution requires engine-session-v1")
+    progress = progress if progress is not None else Progress()
+    work = {trial["run_id"]: index for index, trial in enumerate(selected, 1)}
     by_session: dict[str, list[dict]] = {}
     for trial in selected:
         by_session.setdefault(trial["session_id"], []).append(trial)
     interrupted = stopped = False
-    for session in plan["sessions"]:
+    for position, session in enumerate(plan["sessions"], 1):
         trials = by_session.get(session["session_id"])
         if not trials:
             continue
-        outcome = _execute_session(root, plan, session, trials, data, stop_file)
+        progress.event("session", index=position, total=len(plan["sessions"]),
+                       model=session["model"], rep=session["rep"], widths=session["widths"],
+                       planned=len(session["trials"]), selected=len(trials))
+        outcome = _execute_session(root, plan, session, trials, data, stop_file,
+                                   progress=progress, work=work)
+        counts = progress.report_outcomes(root, trials, work, len(selected))
+        progress.event("session-done", index=position, total=len(plan["sessions"]),
+                       model=session["model"], rep=session["rep"], outcome=outcome,
+                       complete=counts.get("complete", 0), failed=counts.get("failed", 0),
+                       skipped=counts.get("skipped", 0), incomplete=counts.get("incomplete", 0),
+                       pending=counts.get("pending", 0))
         interrupted |= outcome == "interrupted"
         stopped |= outcome == "stopped"
         if interrupted or stopped:
             break
+    progress.report_outcomes(root, selected, work, len(selected))
+    progress.event("run-done", selected=len(selected), planned=len(plan["trials"]),
+                   interrupted=interrupted, stopped=stopped)
     return {"selected": [t["run_id"] for t in selected], "interrupted": interrupted, "stopped": stopped}
 
 
@@ -1047,6 +1176,13 @@ def _positive(value: str) -> int:
     return parsed
 
 
+def _non_negative(value: str) -> int:
+    parsed = int(value)
+    if parsed < 0:
+        raise argparse.ArgumentTypeError("must be non-negative")
+    return parsed
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -1064,9 +1200,13 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--limit-new", type=_positive, help="maximum newly attempted planned runs, including calibration")
     run.add_argument("--model", help="select one configured model id")
     run.add_argument("--kind", choices=KIND_ORDER)
+    run.add_argument("--width", type=_non_negative,
+                     help="select one planned model width; 0 selects the shared calibration/training rows")
     run.add_argument("--retry-failed", action="store_true")
     run.add_argument("--retry-skipped", action="store_true")
     run.add_argument("--stop-file", type=Path)
+    run.add_argument("--progress", action="store_true",
+                     help="stream opt-in progress lines to stderr; the stdout JSON report is unchanged")
     common("status", config=False)
     common("verify")
     return parser
@@ -1100,14 +1240,24 @@ def main(argv: Iterable[str] | None = None) -> int:
         if args.command == "run":
             if cfg.get("execution_protocol") != "engine-session-v1":
                 raise ValueError("archived configurations are read/verify only; run requires engine-session-v1")
+            progress = Progress(sys.stderr) if args.progress else Progress()
             with storage.measurement_lock(LOCK), _signal_handlers():
                 plan = ensure_plan(root, cfg, dataset_info, len(train))
                 selected = select_trials(
-                    plan, root, model=args.model, kind=args.kind, limit_new=args.limit_new,
-                    retry_failed=args.retry_failed, retry_skipped=args.retry_skipped,
+                    plan, root, model=args.model, kind=args.kind, width=args.width,
+                    limit_new=args.limit_new, retry_failed=args.retry_failed,
+                    retry_skipped=args.retry_skipped,
                 )
-                summary = run_selected(root, plan, selected, data, args.stop_file)
+                progress.event("run", phase=cfg["phase"], root=str(root),
+                               planned=len(plan["trials"]), selected=len(selected),
+                               model=args.model, kind=args.kind, width=args.width)
+                summary = run_selected(root, plan, selected, data, args.stop_file, progress=progress)
                 summary.update(status_report(root, plan))
+            counts = summary["counts"]
+            progress.event("finished", complete=counts.get("complete"), failed=counts.get("failed"),
+                           skipped=counts.get("skipped"), incomplete=counts.get("incomplete"),
+                           pending=counts.get("pending"), interrupted=summary["interrupted"],
+                           stopped=summary["stopped"])
             print(json.dumps(summary, indent=2, allow_nan=False))
             if summary["interrupted"]:
                 return 130

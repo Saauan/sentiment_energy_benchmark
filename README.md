@@ -54,6 +54,12 @@ across engines or making architecture-level claims.
 
 ## Reproduce
 
+Two routes exist. The **guided launcher** previews a plan, provisions the pinned
+client and offline inputs, checks readiness, measures, verifies, and writes a
+local report. The **manual route** keeps the individual `benchmark.py` commands
+for auditing, for another host, and for finer control; the launcher does not
+replace it.
+
 ### Before you start
 
 Use one owner at a time for GPU work, downloads, installation/compilation, and
@@ -69,7 +75,136 @@ their artifact roots are **historical/verification inputs only**: read-only,
 with immutable versions and hashes and no switch back to a previous execution
 protocol.
 
-### 1. Install the client and fetch offline inputs
+### Guided route: the launcher
+
+`run_experiment.py` bootstraps the pinned client and the selected engines, checks
+readiness, measures, verifies, and reports; `benchmark.py` still owns every
+measurement, and the launcher adds no experimental condition.
+
+#### Prerequisites
+
+- Linux `x86_64` and a **bootstrap Python 3.11+** (standard library only), with
+  `uv` on `PATH`; `uv` may fetch the pinned 3.12.13 client interpreter.
+- GPU systems need one visible NVIDIA GPU 0 with compute capability 8.0+ and the
+  CUDA 12.8 GA driver (570.26+). With no compatible GPU, only the CPU systems are
+  selected and no GPU is metered.
+- Kernel driver, CUDA compatibility, free disk, and network access are yours to
+  provide. The launcher uses no `sudo` and uploads nothing.
+- Engine environments (vLLM, patched OneJev QEV) and model weights are **not**
+  prerequisites: they are installed or fetched only after you approve the plan.
+
+#### Quick start
+
+```bash
+# Recommended first: a short end-to-end smoke test of the whole pipeline
+python3 run_experiment.py mini --country FRA --dry-run  # plan only: no installs, downloads, writes, measurements
+python3 run_experiment.py mini --country FRA            # confirm, then install + measure + verify + report
+
+# Then the measurement
+python3 run_experiment.py full --country FRA --out artifacts/full_engine_session_02
+```
+
+`--country` is a required ISO 3166-1 alpha-3 code for a new run and is recorded as
+`energy.country_iso_code`. `--out` must not exist; the default root is a
+UTC-stamped `artifacts/<mode>-<stamp>Z`, and the printed root is what you resume.
+Without a terminal, add `--yes` to approve the installs and downloads up front. The
+mode and `--country` are rejected with `--resume`, which reuses the saved ones.
+
+#### What the launcher does
+
+1. **Plan.** Lists `Include`/`Exclude` models with reasons and a conservative
+   weight-download estimate. Selection uses pinned weight bytes plus the configured
+   reserve against GPU 0's total VRAM, so transient occupancy never drops a model;
+   active foreign compute, a current free-VRAM shortfall, insufficient disk, or
+   an unreadable GPU probe blocks the run. If GPU execution is unsupported, the
+   launcher offers the classical systems only.
+2. **Install, after approval only.** Hash-checked dataset/schema inputs, the
+   client `.venv` (pinned 3.12.13), the selected engine environments under
+   `.scratch/launcher/`, then weights one model at a time through
+   `setup/gpu/fetch_models.sh`, whose VRAM, disk, and foreign-compute guard runs
+   again before each download. A post-approval shortfall fails setup instead of
+   silently skipping a model.
+3. **Readiness, measurement, verification, and report** as described below.
+
+Provisioning logs to `.scratch/launcher/provision.log`. It reuses validated
+launcher environments by receipt and refuses to replace unrelated environments. Qwen2B keeps its historical `local_snapshot`
+from the frozen manifest, a path in this checkout's writable parent
+(`../inspect_pilot_study/.scratch/gpu/model`), so those weights land there rather
+than inside the benchmark repository.
+
+#### Full-run readiness
+
+A new `full` run without `--validated` first measures **one separate repetition of
+the same test workload** — selected models, selected widths, configured panel and
+pass counts — under `<root>/readiness/`, with its own resolved configuration and
+verification. It implements the [DESIGN.md §9](DESIGN.md#9-acceptance-sequence)
+rule instead of a named pilot, can cost about a third of the run, and is not a
+result: it is never pooled with or reported beside the measured repetitions, and
+resuming the same root reuses completed readiness trials. Measurement starts only
+if every readiness trial completes, verification passes, sampling is adequate, and
+inference returned valid predictions.
+
+`--validated` replaces that repetition with your attestation that this exact setup
+and these conditions already passed readiness on this host. If a completed
+readiness trial fails the sampling gate, review its logs and use an explicitly
+revised configuration and fresh root via the manual route; do not bypass the gate.
+
+#### `mini` is a smoke test
+
+`mini` keeps phase `full` and the full classical training split but shrinks the
+measured workload to width 1, 9 test tweets (3 warmup), one pass, one repetition,
+and 2 s idle/settle; classical fits still happen in session setup, and training is
+not measured (`measure_training=false`). It exercises installation, engines,
+metering, exports, verification, reporting, and resume end to end.
+
+Its energy, latency, throughput, and quality numbers are **not comparable** with a
+full run, with [RESULTS.md](RESULTS.md), or with each other, even when verification
+passes; its report is marked `SMOKE ONLY`. It also does not establish that the full
+workload fits or samples adequately, so it is not readiness evidence.
+
+#### Artifacts
+
+`launcher.json` (mode, selection/exclusions, same-host guard, readiness policy,
+config digest), `resolved.json` (the frozen configuration; resume requires it
+unchanged), `plan.json` and one directory per trial with `attempt-NNNN/` (result,
+predictions, CodeCarbon CSV, native BoAmps JSON, QEV receipts, logs), `readiness/`,
+`verification.json`, `launcher-logs/invocation-NNNN/*.json`, and
+`report/summary.md` plus `report/*.csv`.
+
+Excluded models are not attempted: report them as such, never as zero energy, a
+failed measurement, or evidence about a model. The download estimate counts a
+selected GPU model as zero only when `config.json` and every pinned shard match
+their manifest sizes; otherwise it counts the full shard sum, and the disk
+requirement adds the 5% margin of `setup/gpu/fetch_models.sh`. It excludes Python,
+packages, and model metadata. Approve only after checking that the selection fits:
+nothing is silently quantized, offloaded, or substituted.
+
+#### Later and reporting
+
+```bash
+python3 run_experiment.py --resume artifacts/full_engine_session_02
+python3 run_experiment.py --resume artifacts/full_engine_session_02 --retry-failed
+.venv/bin/python benchmark.py status --phase full --out artifacts/full_engine_session_02
+.venv/bin/python launcher_report.py artifacts/full_engine_session_02
+```
+
+Resume is same-host only and requires the unchanged `resolved.json`. Completed
+trials are reused; failed or skipped trials are retried only with an explicit
+`--retry-failed` or `--retry-skipped`, in fresh attempts, without changing the
+condition. `launcher_report.py` reads artifacts, never measures, and writes only
+inside `report/`; `analysis.py` and the notebook remain available for tables and
+figures.
+
+Exit status: `0` successful (including a preview or cancellation), `1` readiness
+failed or the run is not fully complete and verified, `2` configuration, setup,
+or preflight error, `130` interrupted.
+
+### Manual route (unchanged)
+
+These commands remain supported for read-only verification, another host, and
+finer control.
+
+#### 1. Install the client and fetch offline inputs
 
 The supported client is **Python 3.12.13**:
 
@@ -103,7 +238,7 @@ Preflight free VRAM before downloading or loading weights. Never silently
 quantize, offload, substitute a model, or change precision to make a condition
 fit.
 
-### 2. Verify historical published runs (read-only)
+#### 2. Verify historical published runs (read-only)
 
 These commands audit existing predictions and native energy reports; they do
 not load a model and produce no new measurements:
@@ -123,7 +258,7 @@ protocol. The corrected CPU pilot (`profiles/laptop-cpu-isolated-02.json` and
 `artifacts/cpu_pilot_isolated_02`) and earlier pilots are preserved as
 historical engineering evidence, not prerequisites or quantitative results.
 
-### 3. Start a fresh run
+#### 3. Start a fresh run
 
 `experiment.json` defines the active `full` phase. The original pilot
 configurations are archived in [`profiles/legacy-experiment.json`](profiles/legacy-experiment.json)
@@ -175,7 +310,7 @@ To resume, reissue the same `run` command. Incomplete trials receive fresh
 `attempt-NNNN` directories. Failed or skipped trials require `--retry-failed`
 or `--retry-skipped`; a retry does not authorize changing the condition.
 
-#### Historical width sweep (verification only)
+##### Historical width sweep (verification only)
 
 The ten-condition sweep at widths 1, 4, 16, 64, and 256 used a per-width engine
 lifecycle and packed Joey only; it predates the engine-session protocol. Do not
@@ -232,6 +367,11 @@ windows; no named pilot phases are required. Previous validation and idle
 baselines do not transfer, so establish fresh per-session calibrations.
 Preserve the panel, checkpoints, engine versions, precision, prompts, widths,
 and `execution_protocol` where possible, and label every difference.
+
+The guided route above does this on a new host: it resolves a fresh root, applies
+the fit-based selection, records the new host's metadata, and runs an automatic
+readiness repetition — or accepts `--validated` when the setup and conditions are
+unchanged. Never copy a launcher root between hosts; resume is same-host only.
 
 This checkout targets one NVIDIA GPU at index 0. Multi-GPU use requires an
 explicit, verified measurement boundary. Faster hardware may need more passes

@@ -517,6 +517,41 @@ configured width its applicable model-loaded (`loaded_idle`) calibration as
 analysis baselines; these are not pilots. Complete the artifact verification in
 section 7 before reporting.
 
+### 9.1 Launcher execution (guided route)
+
+`run_experiment.py` implements this section and leaves `benchmark.py` as the sole
+measurement owner. It introduces no new condition:
+
+- **Fit-based selection.** A GPU model is selected when its pinned weight bytes
+plus the configured reserve fit GPU 0's total VRAM; transient occupancy never
+changes that selection. Active foreign compute, a current free-VRAM shortfall,
+insufficient disk, or an unsupported platform/driver blocks the start instead.
+The selection, every exclusion, and every blocker are recorded in the launcher
+receipt. An excluded model is *not attempted*: report it as such, never as zero
+energy, as a failed measurement, or as evidence about that model.
+- **Default readiness.** A new `full` run measures one separate repetition of the
+selected test workload — every selected model at every selected configured width,
+with the configured panel and pass counts — in a readiness root with its own
+resolved configuration and verification. That repetition is the readiness check
+of this section: it is excluded from results and analysis, never pooled with the
+measured repetitions, and reused rather than repeated when the same root is
+resumed. `--validated` records an operator attestation that this exact setup and
+these conditions already passed readiness and skips the repetition.
+- **Smoke mode.** `mini` keeps phase `full` and the full classical training split
+but shrinks the measured workload: width 1, a 9-tweet panel with 3 warmup rows,
+one pass, one repetition, and 2 s idle/settle. Classical fits still happen in
+session setup, while training is not measured (`measure_training=false`), and
+`mini` is not a phase definition, not readiness evidence for `full`, and not a
+comparable measurement even when artifact verification passes.
+- **Immutability and resume.** Resume requires the original host and an unchanged
+saved configuration. Completed trials are reused unchanged; failed or skipped
+trials are retried only with an explicit `--retry-failed`/`--retry-skipped`, in
+fresh attempts, without changing the condition.
+
+Named historical pilots remain unnecessary: a validated setup measures directly,
+and a new host or relevant runtime/meter change uses the scoped readiness check
+above.
+
 ## 10. Limitations and threats to validity
 
 1. **Complete-system confounding.** Model, runtime, interface, readout, hardware,
