@@ -167,6 +167,62 @@ class BenchmarkTests(unittest.TestCase):
         self.assertEqual(unsupported["expected_count"], 0)
         self.assertEqual(unsupported["native_count"], 0)
 
+    def test_packed_qev_counts_envelopes_and_checks_context_outside_inference(self):
+        cfg = config("qev", batches=(4,), training=False)
+        cfg["models"]["model"]["params"]["request_mode"] = "packed"
+        cfg["sample_size"] = 5
+        cfg["passes"]["model"] = {"4": 2}
+        panel = PANEL + [(3, "good", 2), (4, "bad", 0)]
+        info = {**dataset_info(), "test_ids": [row[0] for row in panel]}
+        data = (cfg, info, TRAIN, VALIDATION, panel, WARMUP)
+        plan = benchmark.ensure_plan(self.root, cfg, info, len(TRAIN))
+        adapter = self.use_adapter(FakeAdapter())
+        adapter.check_context = mock.Mock(side_effect=lambda texts: {
+            "width": len(texts), "fit": True, "model_forwarding": False,
+        })
+
+        def pack(texts):
+            rows = FakeAdapter.predict(adapter, texts)
+            width = len(rows)
+            ids = ["sentiment"] if width == 1 else [f"sentiment_{i + 1}" for i in range(width)]
+            for i, (row, qid) in enumerate(zip(rows, ids, strict=True)):
+                row["raw"].update(request_width=width, target_number=i + 1, question_id=qid)
+            rows[0]["raw"]["request"] = {"width": width, "question_ids": ids}
+            return rows
+
+        adapter.predict = pack
+        with mock.patch.object(benchmark, "_create_adapter", return_value=adapter):
+            benchmark.run_selected(self.root, plan, benchmark.select_trials(plan, self.root), data)
+        inference = plan["trials"][-1]
+        attempt = self.root / inference["run_id"] / "attempt-0001"
+        result = storage.load(attempt / "result.json")
+        self.assertEqual(inference["expected_count"], 10)
+        self.assertEqual(result["native_task"]["nbRequest"], 4)
+        self.assertEqual(result["counts"]["qev_request_count"], 4)
+        self.assertEqual(result["counts"]["qev_choice_count"], 10)
+        self.assertEqual(result["counts"]["final_group_width"], 1)
+        self.assertEqual(len(storage.load(attempt / "qev_context.json")), 3)
+        self.assertEqual(adapter.check_context.call_count, 3)
+        report = benchmark.verify_plan(self.root, plan, data)
+        self.assertTrue(report["ok"], report["inconsistencies"])
+
+    def test_packed_qev_context_rejection_never_calls_predict(self):
+        cfg = config("qev", batches=(4,), training=False)
+        cfg["models"]["model"]["params"]["request_mode"] = "packed"
+        cfg["passes"]["model"] = {"4": 1}
+        plan = self.plan(cfg)
+        adapter = self.use_adapter(FakeAdapter())
+        rejection = Unavailable("packed context exceeds 16384 tokens")
+        rejection.context_receipt = {"fit": False, "max_branch_tokens": 16385}
+        adapter.check_context = mock.Mock(side_effect=rejection)
+        with mock.patch.object(benchmark, "_create_adapter", return_value=adapter):
+            self.run_all(cfg, plan)
+        inference = plan["trials"][-1]
+        self.assertEqual(benchmark.status_report(self.root, plan)["counts"]["skipped"], 2)
+        self.assertEqual(adapter.predict_calls, 0)
+        receipt = storage.load(self.root / inference["run_id"] / "attempt-0001" / "qev_context.json")
+        self.assertEqual(receipt[0]["detail"], rejection.context_receipt)
+
     def test_complete_synthetic_run_persists_audits_and_revalidates(self):
         cfg = config()
         plan = self.plan(cfg)

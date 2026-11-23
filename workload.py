@@ -34,9 +34,13 @@ def predict_group(adapter, rows):
         if isinstance(latency, bool) or not math.isfinite(latency) or latency < 0:
             raise ValueError("invalid adapter latency")
         # Fallback latency is completion of its full static group, not model-only time.
+        scope = value.get("latency_scope", "adapter request" if "latency_s" in value
+                          else "closed-loop group completion")
+        if not isinstance(scope, str) or not scope:
+            raise ValueError("invalid adapter latency scope")
         records.append({"id": row_id, "gold": LABELS[gid], "predicted": label, "raw": value["raw"],
-                        "completed": completed, "latency_s": latency, "latency_scope": "adapter request"
-                        if "latency_s" in value else "closed-loop group completion", "group_s": elapsed})
+                        "completed": completed, "latency_s": latency, "latency_scope": scope,
+                        "group_s": elapsed})
     return records
 
 
@@ -87,6 +91,7 @@ def audit(path, *, test_ids, gold_by_id, batch_size, passes, adapter_kind, windo
     if len(rows) != n * passes or n == 0 or window_s <= 0:
         raise ValueError("saved prediction count/window mismatch")
     group_latencies = []
+    qev_envelopes = 0
     for i, row in enumerate(rows):
         pos = i % n
         group = pos // batch_size
@@ -97,16 +102,35 @@ def audit(path, *, test_ids, gold_by_id, batch_size, passes, adapter_kind, windo
         if row["predicted"] not in (*LABELS, None) or type(row["completed"]) is not bool or (
                 not row["completed"] and row["predicted"] is not None):
             raise ValueError("saved prediction state is invalid")
-        if pos % batch_size == 0:
+        offset = pos % batch_size
+        if offset == 0:
             group_latencies.append(row["group_s"])
+        if adapter_kind == "qev-packed":
+            raw = row["raw"]
+            width = row["group_width"]
+            qid = "sentiment" if width == 1 else f"sentiment_{offset + 1}"
+            if (raw.get("request_width"), raw.get("target_number"), raw.get("question_id")) != (width, offset + 1, qid):
+                raise ValueError(f"packed QEV answer target/width mismatch at row {i}")
+            receipt = raw.get("request")
+            if offset == 0:
+                ids = ["sentiment"] if width == 1 else [f"sentiment_{j + 1}" for j in range(width)]
+                if not isinstance(receipt, dict) or (receipt.get("width"), receipt.get("question_ids")) != (width, ids):
+                    raise ValueError(f"packed QEV envelope receipt missing or mismatched at row {i}")
+                qev_envelopes += 1
+            elif receipt is not None:
+                raise ValueError(f"duplicate packed QEV envelope receipt at row {i}")
     valid = sum(r["predicted"] in LABELS for r in rows)
     correct = sum(r["predicted"] == r["gold"] for r in rows)
     completed = sum(r["completed"] for r in rows)
     counts = {"submitted": len(rows), "completed": completed, "valid": valid, "correct": correct,
               "pass_count": passes, "panel_size": n, "groups": len(group_latencies), "retry_requests": 0,
               "http_request_count": len(rows) if adapter_kind == "vllm" else 0,
-              "qev_choice_count": len(rows) if adapter_kind == "qev" else 0,
+              "qev_choice_count": len(rows) if adapter_kind in {"qev", "qev-packed"} else 0,
               "final_group_width": n % batch_size or min(batch_size, n)}
+    if adapter_kind == "qev-packed":
+        # One RPC returns the choices for every tweet in its group. Keep the
+        # envelope count distinct from prediction rows (including tail groups).
+        counts["qev_request_count"] = qev_envelopes
     quality = _quality(rows[:n])
     quality.update(basis_pass=0, basis_n=n, repeat_disagreements_from_first=sum(
         row["predicted"] != rows[i % n]["predicted"] for i, row in enumerate(rows[n:], start=n)))

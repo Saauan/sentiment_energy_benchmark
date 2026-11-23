@@ -19,6 +19,7 @@ import tempfile
 from time import perf_counter, sleep
 from typing import Any, Iterable
 
+import configuration
 import dataset
 import energy
 import hardware
@@ -30,7 +31,6 @@ ROOT = Path(__file__).resolve().parent
 LOCK = ROOT / ".scratch" / "measurement.lock"
 KIND_ORDER = ("device_idle", "training", "loaded_idle", "inference")
 CLASSICAL = {"svm", "nb", "fasttext"}
-SUPPORTED_BATCHES = {"qev": (1,), "vllm": (1, 16)}
 REFERENCE_FIELDS = ("device_idle_run_id", "training_run_id", "loaded_idle_run_id")
 
 
@@ -48,8 +48,6 @@ class SignalReceived(BaseException):
 
 def _configure(phase: str, config_path: Path):
     """Resolve the two external contracts exactly once for this command."""
-    import configuration
-
     cfg = configuration.configure(phase, config_path)
     dataset_info, train, validation, panel, warmup = dataset.configure(
         cfg["dataset"],
@@ -71,6 +69,14 @@ def _is_cuda(spec: dict) -> bool:
 def _passes(cfg: dict, model: str, batch_size: int) -> int:
     return cfg["passes"][model][str(batch_size)]
 
+
+def _packed_qev(spec: dict) -> bool:
+    return spec["adapter"] == "qev" and (spec.get("params") or {}).get("request_mode") == "packed"
+
+
+def _audit_kind(cfg: dict, trial: dict) -> str:
+    spec = cfg["models"][trial["model"]]
+    return "qev-packed" if _packed_qev(spec) else spec["adapter"]
 
 def _secs(cfg: dict, stem: str) -> float:
     # The on-disk validator currently emits the historical *_s spellings;
@@ -145,7 +151,7 @@ def build_plan(cfg: dict, dataset_info: dict, train_count: int) -> dict:
             kinds.append("loaded_idle")
         kinds.append("inference")
         made: dict[str, dict] = {}
-        supported = SUPPORTED_BATCHES.get(spec["adapter"])
+        supported = configuration.supported_batches(spec)
         for kind in kinds:
             if kind == "inference" and supported is not None and batch not in supported:
                 # Keep unsupported requested conditions visible without requiring
@@ -159,12 +165,15 @@ def build_plan(cfg: dict, dataset_info: dict, train_count: int) -> dict:
                 "training": train_count,
                 "inference": cfg["sample_size"] * passes,
             }[kind]
+            native_count = 0 if kind == "training" else expected
+            if kind == "inference" and _packed_qev(spec):
+                native_count = ((cfg["sample_size"] + batch - 1) // batch) * passes
             trial = {
                 "run_id": "", "phase": cfg["phase"], "kind": kind, "model": model,
                 "batch_size": batch, "rep": rep, "block_id": block_id,
                 "block_index": block_index, "adapter": spec["adapter"],
                 "device": "cuda" if _is_cuda(spec) else "cpu", "passes": passes,
-                "expected_count": expected, "native_count": 0 if kind == "training" else expected,
+                "expected_count": expected, "native_count": native_count,
                 "panel_size": cfg["sample_size"] if kind == "inference" else 0,
                 "config_sha256": config_sha, "dataset_sha256": dataset_sha,
                 "device_idle_run_id": None, "training_run_id": None, "loaded_idle_run_id": None,
@@ -227,6 +236,8 @@ def _native_task(trial: dict, cfg: dict, dataset_info: dict, train_count: int) -
         f"{trial['phase']} {kind}; model={trial['model']}; "
         f"batch={trial['batch_size']}; rep={trial['rep']}"
     )
+    if kind == "inference" and _audit_kind(cfg, trial) == "qev-packed":
+        caption += f"; counted requests=packed envelopes; tweet decisions={trial['expected_count']}"
     return energy.task_context(
         kind, trial["model"], dataset_info, trial["native_count"], caption,
         data_quantity=quantity,
@@ -424,13 +435,14 @@ def _measure_inference(root: Path, trial: dict, cfg: dict, dataset_info: dict, t
         predictions, test_ids=dataset_info["test_ids"],
         gold_by_id={row[0]: dataset.LABELS[row[2]] for row in panel},
         batch_size=trial["batch_size"], passes=trial["passes"],
-        adapter_kind="vllm" if trial["adapter"] == "vllm" else "qev" if trial["adapter"] == "qev" else "classical",
-        window_s=window_s,
+        adapter_kind=_audit_kind(cfg, trial), window_s=window_s,
     )
     outside["audit"] = perf_counter() - started
     counts = _inference_counts(counts)
-    if not (native["count"] == counts["submitted"] == len(rows) == trial["expected_count"]):
-        raise ValueError("inference saved/actual/native prediction count mismatch")
+    actual_requests = counts.get("qev_request_count", counts["submitted"])
+    if not (counts["submitted"] == len(rows) == trial["expected_count"]
+            and native["count"] == actual_requests == trial["native_count"]):
+        raise ValueError("inference saved/actual tweet or native request count mismatch")
     result = _base_result(trial, cfg, dataset_info, host, native, task, adapter_metadata)
     result.update(
         counts=counts, quality=quality, performance=performance,
@@ -519,11 +531,33 @@ def _preflight_block(cfg: dict, block: dict, host: dict) -> tuple[dict, dict, di
     spec = _runtime_spec(cfg["models"][block["model"]])
     evidence, reason = hardware.preflight(spec, host)
     receipt = {"host": host, "preflight": evidence}
-    supported = SUPPORTED_BATCHES.get(spec["adapter"])
+    supported = configuration.supported_batches(spec)
     if reason is None and supported is not None and block["batch_size"] not in supported:
         reason = f"{spec['adapter']} does not support independent batch {block['batch_size']}"
         receipt["supported_batches"] = supported
     return spec, evidence, receipt, reason
+
+
+def _check_packed_context(adapter, panel: list, warmup: list, width: int,
+                          path: Path, stop_file: Path | None) -> list[dict]:
+    """Tokenize every panel and warmup envelope once, before measuring inference."""
+    checks: list[dict] = []
+    try:
+        for split, rows in (("test", panel), ("warmup", warmup)):
+            for group_index, group in enumerate(workload.groups(rows, width)):
+                _check_stop(stop_file)
+                try:
+                    detail = adapter.check_context([row[1] for row in group])
+                except Unavailable as exc:
+                    checks.append({"split": split, "group_index": group_index,
+                                   "detail": getattr(exc, "context_receipt", None), "error": str(exc)})
+                    raise
+                if detail.get("fit") is not True or detail.get("model_forwarding") is not False:
+                    raise ValueError("packed context preflight did not confirm fit without forwarding")
+                checks.append({"split": split, "group_index": group_index, "detail": detail})
+    finally:
+        storage.atomic_json(path, checks)
+    return checks
 
 
 def _execute_block(root: Path, plan: dict, block: dict, selected: list[dict], data: tuple,
@@ -570,6 +604,8 @@ def _execute_block(root: Path, plan: dict, block: dict, selected: list[dict], da
         run, attempt = _start(root, home)
         active[home["run_id"]] = run
         adapter_attempt = attempt
+        if spec["adapter"] == "vllm":
+            spec["submission_width"] = block["batch_size"]
         adapter = _create_adapter(spec, attempt)
         metadata: dict = {}
         outside: dict = {"preflight": evidence}
@@ -591,6 +627,20 @@ def _execute_block(root: Path, plan: dict, block: dict, selected: list[dict], da
             outside["setup_measured_in"] = home.get("training_run_id")
         if inference is not None:
             _check_stop(stop_file)
+            if _packed_qev(spec):
+                run = active.get(inference["run_id"])
+                if run is None:
+                    run, inference_attempt = _start(root, inference)
+                    active[inference["run_id"]] = run
+                else:
+                    inference_attempt = run.path / run.state["active_attempt"]
+                context_file = inference_attempt / "qev_context.json"
+                started = perf_counter()
+                context = _check_packed_context(adapter, panel, warmup, inference["batch_size"],
+                                                context_file, stop_file)
+                outside["context_preflight_s"] = perf_counter() - started
+                outside["context_preflight"] = {"file": context_file.name, "groups": len(context),
+                                                "sha256": storage.content_hash(context_file)}
             started = perf_counter()
             if warmup:
                 workload.run_workload(adapter, warmup, inference["batch_size"], 1)
@@ -740,13 +790,27 @@ def verify_plan(root: Path, plan: dict, data: tuple) -> dict:
                     predictions, test_ids=dataset_info["test_ids"],
                     gold_by_id={row[0]: dataset.LABELS[row[2]] for row in data[4]},
                     batch_size=trial["batch_size"], passes=trial["passes"],
-                    adapter_kind="vllm" if trial["adapter"] == "vllm" else "qev" if trial["adapter"] == "qev" else "classical",
-                    window_s=result["performance"]["window_s"],
+                    adapter_kind=_audit_kind(cfg, trial), window_s=result["performance"]["window_s"],
                 )
+                if actual_counts.get("qev_request_count", actual_counts["submitted"]) != native["count"]:
+                    raise ValueError("native request count differs from audited envelope count")
                 if counts != _inference_counts(actual_counts) or result.get("quality") != quality or result.get("performance") != performance:
                     raise ValueError("saved prediction audit differs from exported metrics")
                 if prediction_info.get("rows") != actual_counts["submitted"]:
                     raise ValueError("prediction row metadata mismatch")
+                if _audit_kind(cfg, trial) == "qev-packed":
+                    context = result["outside_window_s"]["context_preflight"]
+                    expected = [(split, i, len(group)) for split, rows in (("test", data[4]), ("warmup", data[5]))
+                                for i, group in enumerate(workload.groups(rows, trial["batch_size"]))]
+                    path = attempt / "qev_context.json"
+                    if (context.get("file") != path.name or context.get("groups") != len(expected)
+                            or context.get("sha256") != storage.content_hash(path)):
+                        raise ValueError("packed context receipt identity mismatch")
+                    checks = storage.load(path)
+                    if ([(c["split"], c["group_index"], c["detail"]["width"]) for c in checks] != expected
+                            or any(c["detail"].get("fit") is not True
+                                   or c["detail"].get("model_forwarding") is not False for c in checks)):
+                        raise ValueError("packed context receipt group or fit mismatch")
             elif trial["kind"] == "training":
                 if result.get("adapter", {}).get("train_rows") != len(train):
                     raise ValueError("training row metadata mismatch")
@@ -803,7 +867,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     def common(name: str, *, config: bool = True):
         command = sub.add_parser(name)
-        command.add_argument("--phase", required=True, help="gpu_pilot, cpu_pilot, or full")
+        command.add_argument("--phase", required=True, help="phase name in the selected configuration")
         if config:
             command.add_argument("--config", type=Path, default=ROOT / "experiment.json")
         command.add_argument("--out", type=Path, help="default: artifacts/<phase>/")

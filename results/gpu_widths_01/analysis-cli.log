@@ -1,0 +1,414 @@
+$ /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/.venv/bin/python analysis.py /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01 --output-dir /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/results/gpu_widths_01
+[exit 0]
+--- stdout ---
+Discovered runs (all statuses)
+                  run_id                                                                                                                                             run_dir   status      phase        kind  model  batch_size  rep artifact_status result_error
+019351b0ba88510a489ef868 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/019351b0ba88510a489ef868 complete gpu_widths device_idle qwen2b          16    2              ok         None
+0568681241941bfb02141365 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/0568681241941bfb02141365 complete gpu_widths   inference qwen2b           1    0              ok         None
+05bace7cac0e6c4a2c623741 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/05bace7cac0e6c4a2c623741 complete gpu_widths device_idle  joey1          64    0              ok         None
+076992874cd650fc15d8e896 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/076992874cd650fc15d8e896 complete gpu_widths   inference qwen2b           4    1              ok         None
+12cde2fea0799b1ed199ca7a /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/12cde2fea0799b1ed199ca7a complete gpu_widths loaded_idle qwen2b          64    2              ok         None
+1b5e0be9b2f901a3243be0b6 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/1b5e0be9b2f901a3243be0b6 complete gpu_widths loaded_idle qwen2b          16    2              ok         None
+200243ac2ce3f2a6ebbdc856 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/200243ac2ce3f2a6ebbdc856 complete gpu_widths loaded_idle  joey1          16    1              ok         None
+20463bc875062e7746992240 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/20463bc875062e7746992240 complete gpu_widths loaded_idle qwen2b          16    1              ok         None
+231298f404975943fb59ef43 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/231298f404975943fb59ef43 complete gpu_widths device_idle qwen2b           1    0              ok         None
+28751453aed36741c77b31c4 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/28751453aed36741c77b31c4 complete gpu_widths   inference  joey1         256    1              ok         None
+2c138f644466ce6737697e4a /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/2c138f644466ce6737697e4a complete gpu_widths   inference  joey1           1    1              ok         None
+2d7218ba678c61c6f7213727 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/2d7218ba678c61c6f7213727 complete gpu_widths   inference  joey1          16    0              ok         None
+2f4305ad77a4ec12029217e9 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/2f4305ad77a4ec12029217e9 complete gpu_widths loaded_idle qwen2b           4    2              ok         None
+309b5127fb9571dc6595aecf /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/309b5127fb9571dc6595aecf complete gpu_widths device_idle qwen2b           4    0              ok         None
+36c062888e25a4f89f479d82 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/36c062888e25a4f89f479d82 complete gpu_widths   inference  joey1          64    0              ok         None
+3c0c264d5377e6d9e21f1c84 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/3c0c264d5377e6d9e21f1c84 complete gpu_widths   inference qwen2b          64    2              ok         None
+3d30ab3eff00ec8aafa7b403 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/3d30ab3eff00ec8aafa7b403 complete gpu_widths   inference qwen2b          64    0              ok         None
+3f24405cd2a330d89be9d69b /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/3f24405cd2a330d89be9d69b complete gpu_widths loaded_idle qwen2b           4    1              ok         None
+412148e6f9fbc662669f92a9 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/412148e6f9fbc662669f92a9 complete gpu_widths   inference qwen2b         256    2              ok         None
+4192a895485b05778d739bab /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/4192a895485b05778d739bab complete gpu_widths loaded_idle qwen2b         256    0              ok         None
+41edab56ea5c6442f9772f03 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/41edab56ea5c6442f9772f03 complete gpu_widths loaded_idle qwen2b           1    1              ok         None
+48229b8f14c9ca202ba82ac5 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/48229b8f14c9ca202ba82ac5 complete gpu_widths device_idle  joey1         256    1              ok         None
+4b43610cc70585751f6f37ca /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/4b43610cc70585751f6f37ca complete gpu_widths device_idle  joey1           4    2              ok         None
+4d602cfc9b2636410e64682e /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/4d602cfc9b2636410e64682e complete gpu_widths   inference  joey1           4    1              ok         None
+50ccfebcfe3e33d335064e7a /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/50ccfebcfe3e33d335064e7a complete gpu_widths loaded_idle  joey1           1    2              ok         None
+52d353d44e700ca7492ca213 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/52d353d44e700ca7492ca213 complete gpu_widths   inference  joey1          16    1              ok         None
+5356b0fbc8c641c6d74296e7 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/5356b0fbc8c641c6d74296e7 complete gpu_widths device_idle  joey1          16    2              ok         None
+540837a76e89a50feebb6d8d /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/540837a76e89a50feebb6d8d complete gpu_widths   inference qwen2b         256    0              ok         None
+57b0ab13621c42360b72b63c /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/57b0ab13621c42360b72b63c complete gpu_widths   inference qwen2b          16    1              ok         None
+5bbc5ae4d94959cde717ddc5 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/5bbc5ae4d94959cde717ddc5 complete gpu_widths loaded_idle  joey1          16    0              ok         None
+5e886c33074008f13e0596a7 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/5e886c33074008f13e0596a7 complete gpu_widths   inference  joey1           4    0              ok         None
+5f318f7267ebecc47a2673d7 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/5f318f7267ebecc47a2673d7 complete gpu_widths   inference qwen2b           1    2              ok         None
+65c14f4cb642252ff4bce198 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/65c14f4cb642252ff4bce198 complete gpu_widths device_idle  joey1           4    0              ok         None
+66a7ad8e3e7159e0c96606b2 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/66a7ad8e3e7159e0c96606b2 complete gpu_widths   inference  joey1           4    2              ok         None
+674873a89da69b73905ab888 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/674873a89da69b73905ab888 complete gpu_widths   inference  joey1           1    2              ok         None
+6810aa442253cbf3b6496401 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/6810aa442253cbf3b6496401 complete gpu_widths loaded_idle  joey1           1    1              ok         None
+718541f4487a413aa301e954 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/718541f4487a413aa301e954 complete gpu_widths device_idle  joey1           4    1              ok         None
+73b1afeb5a0758a85fe01f0d /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/73b1afeb5a0758a85fe01f0d complete gpu_widths   inference  joey1         256    0              ok         None
+73dd02d58a1c78b61cd36d74 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/73dd02d58a1c78b61cd36d74 complete gpu_widths   inference  joey1          64    2              ok         None
+745d1dd96ca60ffa369e8973 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/745d1dd96ca60ffa369e8973 complete gpu_widths loaded_idle  joey1          16    2              ok         None
+7b39b3957d0b50f69383e28a /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/7b39b3957d0b50f69383e28a complete gpu_widths device_idle qwen2b           1    2              ok         None
+7b89ea04e43b239f4ca4c3f8 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/7b89ea04e43b239f4ca4c3f8 complete gpu_widths   inference  joey1          16    2              ok         None
+841005770d96cc14a82dda6e /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/841005770d96cc14a82dda6e complete gpu_widths device_idle qwen2b          64    1              ok         None
+87b4cd100b74858872d2dc5e /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/87b4cd100b74858872d2dc5e complete gpu_widths device_idle qwen2b           1    1              ok         None
+8a5fad6dcdceb2875e4e343e /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/8a5fad6dcdceb2875e4e343e complete gpu_widths device_idle qwen2b          16    0              ok         None
+8aa12e8882cfcf2248412e10 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/8aa12e8882cfcf2248412e10 complete gpu_widths loaded_idle qwen2b           4    0              ok         None
+8aa5d6bbcbfaff42d70d830e /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/8aa5d6bbcbfaff42d70d830e complete gpu_widths loaded_idle  joey1         256    0              ok         None
+8aab13fb9ca8410b90214c31 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/8aab13fb9ca8410b90214c31 complete gpu_widths device_idle  joey1         256    0              ok         None
+918140a0a52983d53810bc58 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/918140a0a52983d53810bc58 complete gpu_widths device_idle qwen2b         256    0              ok         None
+a13a9f0a0628c03594511573 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/a13a9f0a0628c03594511573 complete gpu_widths device_idle  joey1          64    2              ok         None
+a14c9e529bcaee3563373740 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/a14c9e529bcaee3563373740 complete gpu_widths   inference qwen2b          16    0              ok         None
+a5ad7a7800a57fbaf4586ea0 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/a5ad7a7800a57fbaf4586ea0 complete gpu_widths loaded_idle qwen2b         256    2              ok         None
+a6122910bb190b6a70f50625 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/a6122910bb190b6a70f50625 complete gpu_widths device_idle  joey1           1    2              ok         None
+aef0f43386adeb0db1ccd816 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/aef0f43386adeb0db1ccd816 complete gpu_widths loaded_idle  joey1          64    1              ok         None
+b10d02ca894357ec9c340315 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/b10d02ca894357ec9c340315 complete gpu_widths device_idle qwen2b         256    2              ok         None
+b3b8e6c4cac982c3e5da98e8 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/b3b8e6c4cac982c3e5da98e8 complete gpu_widths   inference qwen2b           1    1              ok         None
+b73b562695fda45f70317c8c /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/b73b562695fda45f70317c8c complete gpu_widths device_idle qwen2b           4    1              ok         None
+b7f2661ef62169d9aabb1a32 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/b7f2661ef62169d9aabb1a32 complete gpu_widths device_idle  joey1          16    1              ok         None
+b93bb29c753f84bea4cdd84c /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/b93bb29c753f84bea4cdd84c complete gpu_widths device_idle qwen2b           4    2              ok         None
+bb97ec3fdadf45e5058bfc3e /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/bb97ec3fdadf45e5058bfc3e complete gpu_widths   inference qwen2b          64    1              ok         None
+bcd63e97432cff10fe8defbc /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/bcd63e97432cff10fe8defbc complete gpu_widths   inference qwen2b          16    2              ok         None
+bd191dba102e4a382a62f2aa /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/bd191dba102e4a382a62f2aa complete gpu_widths loaded_idle  joey1         256    2              ok         None
+be413896453ee83cb2b4929a /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/be413896453ee83cb2b4929a complete gpu_widths   inference  joey1         256    2              ok         None
+bfe6ed605f3d71becb017281 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/bfe6ed605f3d71becb017281 complete gpu_widths loaded_idle  joey1          64    2              ok         None
+c1ab1832638cd838b5013cc2 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/c1ab1832638cd838b5013cc2 complete gpu_widths loaded_idle qwen2b          64    0              ok         None
+c46313b9477ad2075e1f2a5c /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/c46313b9477ad2075e1f2a5c complete gpu_widths loaded_idle  joey1         256    1              ok         None
+c77bbea9e85d985fc7f13894 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/c77bbea9e85d985fc7f13894 complete gpu_widths   inference  joey1          64    1              ok         None
+c7db96bf452f2f97d29bbbd0 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/c7db96bf452f2f97d29bbbd0 complete gpu_widths   inference qwen2b         256    1              ok         None
+ca4b9484fa0493a0ded4ee59 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/ca4b9484fa0493a0ded4ee59 complete gpu_widths device_idle qwen2b          64    0              ok         None
+ceb59b655adcb1dae223d389 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/ceb59b655adcb1dae223d389 complete gpu_widths device_idle qwen2b          16    1              ok         None
+cf102b172ba48d86d9775ac3 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/cf102b172ba48d86d9775ac3 complete gpu_widths device_idle  joey1          16    0              ok         None
+d2acd6c813f11be875b98b4a /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/d2acd6c813f11be875b98b4a complete gpu_widths device_idle  joey1           1    0              ok         None
+d4a03ef31593758023ec28b3 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/d4a03ef31593758023ec28b3 complete gpu_widths device_idle  joey1           1    1              ok         None
+d77380e7a4b403243461a511 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/d77380e7a4b403243461a511 complete gpu_widths loaded_idle  joey1           4    0              ok         None
+d8103b821bfa011776a965c7 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/d8103b821bfa011776a965c7 complete gpu_widths loaded_idle  joey1           1    0              ok         None
+d9f0efa06183cad1c79f6d4b /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/d9f0efa06183cad1c79f6d4b complete gpu_widths loaded_idle  joey1          64    0              ok         None
+dafe89edef0b5db789da386f /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/dafe89edef0b5db789da386f complete gpu_widths loaded_idle  joey1           4    2              ok         None
+dd71242e5b947de821c45e91 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/dd71242e5b947de821c45e91 complete gpu_widths   inference qwen2b           4    0              ok         None
+de8f0f223e293814657be52a /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/de8f0f223e293814657be52a complete gpu_widths   inference qwen2b           4    2              ok         None
+ded224127c6a757e8de29e3d /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/ded224127c6a757e8de29e3d complete gpu_widths loaded_idle qwen2b         256    1              ok         None
+df295d33fee106600d886956 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/df295d33fee106600d886956 complete gpu_widths loaded_idle qwen2b          64    1              ok         None
+e068d27b4f945c40bd2035bc /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/e068d27b4f945c40bd2035bc complete gpu_widths   inference  joey1           1    0              ok         None
+e2e81aeb89d652f063b3ffb4 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/e2e81aeb89d652f063b3ffb4 complete gpu_widths device_idle qwen2b         256    1              ok         None
+ee38c9284fd3b9fc8e463931 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/ee38c9284fd3b9fc8e463931 complete gpu_widths loaded_idle  joey1           4    1              ok         None
+f1a657aa0885ec2354485aca /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/f1a657aa0885ec2354485aca complete gpu_widths loaded_idle qwen2b           1    2              ok         None
+f659ffb9160bb1fc6985dd6f /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/f659ffb9160bb1fc6985dd6f complete gpu_widths device_idle qwen2b          64    2              ok         None
+f712268cb8a0449a85670dd8 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/f712268cb8a0449a85670dd8 complete gpu_widths loaded_idle qwen2b          16    0              ok         None
+fdefbb528910fa476fe60cbd /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/fdefbb528910fa476fe60cbd complete gpu_widths device_idle  joey1          64    1              ok         None
+fec0efb78cd1c8bec5c0b51c /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/fec0efb78cd1c8bec5c0b51c complete gpu_widths loaded_idle qwen2b           1    0              ok         None
+fecd9c9f79423f3f1a860695 /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/artifacts/gpu_widths_01/fecd9c9f79423f3f1a860695 complete gpu_widths device_idle  joey1         256    2              ok         None
+
+Non-complete runs
+(no rows)
+
+Successful inference trials (one row per trial; no pooled conditions)
+                  run_id      phase      kind  model  batch_size  rep  count_submitted  count_completed  count_valid  count_correct  quality_macro_recall  quality_macro_f1  quality_accuracy  quality_coverage  energy_kwh  gross_j_per_tweet  device_idle_adjusted_j_per_tweet  loaded_idle_adjusted_j_per_tweet  throughput_tweets_s  latency_p50_s  latency_p95_s
+0568681241941bfb02141365 gpu_widths inference qwen2b           1    0              257              257          257            117              0.588501          0.423013          0.455253               1.0    0.000343           4.808693                          3.313128                          2.932314            24.039197       0.040738       0.045124
+076992874cd650fc15d8e896 gpu_widths inference qwen2b           4    1              257              257          257            117              0.588501          0.424166          0.455253               1.0    0.000101           1.410719                          0.939149                          0.853043            81.274080       0.041914       0.061588
+28751453aed36741c77b31c4 gpu_widths inference  joey1         256    1             1028             1028         1028            648              0.578267          0.573794          0.630350               1.0    0.001110           3.886099                          2.068839                          1.650483            19.872749      11.727079      16.101509
+2c138f644466ce6737697e4a gpu_widths inference  joey1           1    1              257              257          257            168              0.646204          0.646628          0.653696               1.0    0.000402           5.637290                          3.880059                          3.519166            20.268224       0.049084       0.053777
+2d7218ba678c61c6f7213727 gpu_widths inference  joey1          16    0             1028             1028         1028            656              0.581856          0.585905          0.638132               1.0    0.000427           1.496349                          0.994794                          0.912322            76.820334       0.204736       0.216427
+36c062888e25a4f89f479d82 gpu_widths inference  joey1          64    0             1028             1028         1028            652              0.592552          0.598058          0.634241               1.0    0.000559           1.957703                          1.219676                          1.096774            51.871298       1.214938       1.372102
+3c0c264d5377e6d9e21f1c84 gpu_widths inference qwen2b          64    2             1028             1028         1028            474              0.594912          0.427499          0.459144               1.0    0.000201           0.702181                          0.477955                          0.422494           162.275943       0.248862       0.399381
+3d30ab3eff00ec8aafa7b403 gpu_widths inference qwen2b          64    0             1028             1028         1028            475              0.601322          0.432442          0.463035               1.0    0.000210           0.733988                          0.491012                          0.444662           155.024364       0.245047       0.429413
+412148e6f9fbc662669f92a9 gpu_widths inference qwen2b         256    2             1028             1028         1028            473              0.594912          0.428663          0.459144               1.0    0.000204           0.713716                          0.473793                          0.432003           159.164947       0.791807       1.492701
+4d602cfc9b2636410e64682e gpu_widths inference  joey1           4    1              514              514          514            326              0.588949          0.599031          0.634241               1.0    0.000270           1.889738                          1.241622                          1.143186            59.926385       0.065566       0.072503
+52d353d44e700ca7492ca213 gpu_widths inference  joey1          16    1             1028             1028         1028            656              0.581856          0.585905          0.638132               1.0    0.000414           1.448197                          0.951077                          0.869814            76.672280       0.205983       0.216798
+540837a76e89a50feebb6d8d gpu_widths inference qwen2b         256    0             1028             1028         1028            472              0.594912          0.428009          0.459144               1.0    0.000198           0.694579                          0.461743                          0.414693           161.094528       0.773927       1.477347
+57b0ab13621c42360b72b63c gpu_widths inference qwen2b          16    1             1028             1028         1028            473              0.601322          0.431263          0.463035               1.0    0.000218           0.762831                          0.501265                          0.460976           147.724723       0.095718       0.112976
+5e886c33074008f13e0596a7 gpu_widths inference  joey1           4    0              514              514          514            326              0.588949          0.599031          0.634241               1.0    0.000264           1.852410                          1.236411                          1.124250            60.514526       0.065019       0.070568
+5f318f7267ebecc47a2673d7 gpu_widths inference qwen2b           1    2              257              257          257            117              0.588501          0.423013          0.455253               1.0    0.000327           4.574027                          3.085889                          2.787955            25.403092       0.038006       0.044078
+66a7ad8e3e7159e0c96606b2 gpu_widths inference  joey1           4    2              514              514          514            326              0.588949          0.599031          0.634241               1.0    0.000273           1.911283                          1.316725                          1.169452            60.555119       0.064896       0.071720
+674873a89da69b73905ab888 gpu_widths inference  joey1           1    2              257              257          257            168              0.646204          0.646628          0.653696               1.0    0.000403           5.652016                          3.741030                          3.461519            20.170588       0.049340       0.053896
+73b1afeb5a0758a85fe01f0d gpu_widths inference  joey1         256    0             1028             1028         1028            648              0.578267          0.573794          0.630350               1.0    0.000935           3.275591                          1.614050                          1.356118            23.210826      10.887440      11.372940
+73dd02d58a1c78b61cd36d74 gpu_widths inference  joey1          64    2             1028             1028         1028            652              0.592552          0.598058          0.634241               1.0    0.000753           2.637542                          1.622645                          1.439674            36.729854       1.359577       6.763262
+7b89ea04e43b239f4ca4c3f8 gpu_widths inference  joey1          16    2             1028             1028         1028            656              0.581856          0.585905          0.638132               1.0    0.000433           1.516581                          1.001074                          0.931051            76.264766       0.207120       0.222566
+a14c9e529bcaee3563373740 gpu_widths inference qwen2b          16    0             1028             1028         1028            473              0.594912          0.428663          0.459144               1.0    0.000219           0.766060                          0.518883                          0.458198           145.359646       0.098466       0.115564
+b3b8e6c4cac982c3e5da98e8 gpu_widths inference qwen2b           1    1              257              257          257            117              0.588501          0.423013          0.455253               1.0    0.000326           4.573524                          3.011839                          2.724295            24.389006       0.039927       0.045869
+bb97ec3fdadf45e5058bfc3e gpu_widths inference qwen2b          64    1             1028             1028         1028            472              0.594912          0.428663          0.459144               1.0    0.000209           0.730690                          0.501599                          0.441621           156.499678       0.237835       0.408773
+bcd63e97432cff10fe8defbc gpu_widths inference qwen2b          16    2             1028             1028         1028            472              0.594912          0.427499          0.459144               1.0    0.000223           0.781331                          0.522077                          0.476955           147.034369       0.096668       0.116715
+be413896453ee83cb2b4929a gpu_widths inference  joey1         256    2             1028             1028         1028            648              0.578267          0.573794          0.630350               1.0    0.000940           3.292484                          1.632114                          1.347111            22.918752      11.090455      11.413159
+c77bbea9e85d985fc7f13894 gpu_widths inference  joey1          64    1             1028             1028         1028            652              0.592552          0.598058          0.634241               1.0    0.000557           1.951233                          1.224006                          1.102009            52.153780       1.211641       1.332340
+c7db96bf452f2f97d29bbbd0 gpu_widths inference qwen2b         256    1             1028             1028         1028            475              0.601322          0.431263          0.463035               1.0    0.000196           0.686905                          0.455884                          0.415847           165.433439       0.795337       1.443827
+dd71242e5b947de821c45e91 gpu_widths inference qwen2b           4    0              257              257          257            118              0.594912          0.428009          0.459144               1.0    0.000104           1.462276                          0.949050                          0.854055            73.671105       0.042277       0.063207
+de8f0f223e293814657be52a gpu_widths inference qwen2b           4    2              257              257          257            119              0.601322          0.432442          0.463035               1.0    0.000093           1.297543                          0.862089                          0.785122            87.192234       0.041560       0.056411
+e068d27b4f945c40bd2035bc gpu_widths inference  joey1           1    0              257              257          257            168              0.646204          0.646628          0.653696               1.0    0.000398           5.573456                          3.750621                          3.343348            20.088107       0.049528       0.054165
+
+Energy components (kWh; missing components remain null)
+                  run_id      phase        kind  model  batch_size  rep component  energy_kwh
+019351b0ba88510a489ef868 gpu_widths device_idle qwen2b          16    2       cpu    0.000021
+019351b0ba88510a489ef868 gpu_widths device_idle qwen2b          16    2       gpu    0.000020
+019351b0ba88510a489ef868 gpu_widths device_idle qwen2b          16    2       ram    0.000043
+0568681241941bfb02141365 gpu_widths   inference qwen2b           1    0       cpu    0.000029
+0568681241941bfb02141365 gpu_widths   inference qwen2b           1    0       gpu    0.000258
+0568681241941bfb02141365 gpu_widths   inference qwen2b           1    0       ram    0.000057
+05bace7cac0e6c4a2c623741 gpu_widths device_idle  joey1          64    0       cpu    0.000021
+05bace7cac0e6c4a2c623741 gpu_widths device_idle  joey1          64    0       gpu    0.000021
+05bace7cac0e6c4a2c623741 gpu_widths device_idle  joey1          64    0       ram    0.000043
+076992874cd650fc15d8e896 gpu_widths   inference qwen2b           4    1       cpu    0.000009
+076992874cd650fc15d8e896 gpu_widths   inference qwen2b           4    1       gpu    0.000075
+076992874cd650fc15d8e896 gpu_widths   inference qwen2b           4    1       ram    0.000017
+12cde2fea0799b1ed199ca7a gpu_widths loaded_idle qwen2b          64    2       cpu    0.000032
+12cde2fea0799b1ed199ca7a gpu_widths loaded_idle qwen2b          64    2       gpu    0.000053
+12cde2fea0799b1ed199ca7a gpu_widths loaded_idle qwen2b          64    2       ram    0.000066
+1b5e0be9b2f901a3243be0b6 gpu_widths loaded_idle qwen2b          16    2       cpu    0.000032
+1b5e0be9b2f901a3243be0b6 gpu_widths loaded_idle qwen2b          16    2       gpu    0.000052
+1b5e0be9b2f901a3243be0b6 gpu_widths loaded_idle qwen2b          16    2       ram    0.000065
+200243ac2ce3f2a6ebbdc856 gpu_widths loaded_idle  joey1          16    1       cpu    0.000032
+200243ac2ce3f2a6ebbdc856 gpu_widths loaded_idle  joey1          16    1       gpu    0.000050
+200243ac2ce3f2a6ebbdc856 gpu_widths loaded_idle  joey1          16    1       ram    0.000065
+20463bc875062e7746992240 gpu_widths loaded_idle qwen2b          16    1       cpu    0.000032
+20463bc875062e7746992240 gpu_widths loaded_idle qwen2b          16    1       gpu    0.000051
+20463bc875062e7746992240 gpu_widths loaded_idle qwen2b          16    1       ram    0.000065
+231298f404975943fb59ef43 gpu_widths device_idle qwen2b           1    0       cpu    0.000021
+231298f404975943fb59ef43 gpu_widths device_idle qwen2b           1    0       gpu    0.000015
+231298f404975943fb59ef43 gpu_widths device_idle qwen2b           1    0       ram    0.000043
+28751453aed36741c77b31c4 gpu_widths   inference  joey1         256    1       cpu    0.000138
+28751453aed36741c77b31c4 gpu_widths   inference  joey1         256    1       gpu    0.000692
+28751453aed36741c77b31c4 gpu_widths   inference  joey1         256    1       ram    0.000279
+2c138f644466ce6737697e4a gpu_widths   inference  joey1           1    1       cpu    0.000034
+2c138f644466ce6737697e4a gpu_widths   inference  joey1           1    1       gpu    0.000300
+2c138f644466ce6737697e4a gpu_widths   inference  joey1           1    1       ram    0.000069
+2d7218ba678c61c6f7213727 gpu_widths   inference  joey1          16    0       cpu    0.000036
+2d7218ba678c61c6f7213727 gpu_widths   inference  joey1          16    0       gpu    0.000321
+2d7218ba678c61c6f7213727 gpu_widths   inference  joey1          16    0       ram    0.000070
+2f4305ad77a4ec12029217e9 gpu_widths loaded_idle qwen2b           4    2       cpu    0.000032
+2f4305ad77a4ec12029217e9 gpu_widths loaded_idle qwen2b           4    2       gpu    0.000050
+2f4305ad77a4ec12029217e9 gpu_widths loaded_idle qwen2b           4    2       ram    0.000066
+309b5127fb9571dc6595aecf gpu_widths device_idle qwen2b           4    0       cpu    0.000021
+309b5127fb9571dc6595aecf gpu_widths device_idle qwen2b           4    0       gpu    0.000019
+309b5127fb9571dc6595aecf gpu_widths device_idle qwen2b           4    0       ram    0.000043
+36c062888e25a4f89f479d82 gpu_widths   inference  joey1          64    0       cpu    0.000053
+36c062888e25a4f89f479d82 gpu_widths   inference  joey1          64    0       gpu    0.000401
+36c062888e25a4f89f479d82 gpu_widths   inference  joey1          64    0       ram    0.000105
+3c0c264d5377e6d9e21f1c84 gpu_widths   inference qwen2b          64    2       cpu    0.000017
+3c0c264d5377e6d9e21f1c84 gpu_widths   inference qwen2b          64    2       gpu    0.000149
+3c0c264d5377e6d9e21f1c84 gpu_widths   inference qwen2b          64    2       ram    0.000034
+3d30ab3eff00ec8aafa7b403 gpu_widths   inference qwen2b          64    0       cpu    0.000018
+3d30ab3eff00ec8aafa7b403 gpu_widths   inference qwen2b          64    0       gpu    0.000157
+3d30ab3eff00ec8aafa7b403 gpu_widths   inference qwen2b          64    0       ram    0.000035
+3f24405cd2a330d89be9d69b gpu_widths loaded_idle qwen2b           4    1       cpu    0.000032
+3f24405cd2a330d89be9d69b gpu_widths loaded_idle qwen2b           4    1       gpu    0.000053
+3f24405cd2a330d89be9d69b gpu_widths loaded_idle qwen2b           4    1       ram    0.000066
+412148e6f9fbc662669f92a9 gpu_widths   inference qwen2b         256    2       cpu    0.000017
+412148e6f9fbc662669f92a9 gpu_widths   inference qwen2b         256    2       gpu    0.000152
+412148e6f9fbc662669f92a9 gpu_widths   inference qwen2b         256    2       ram    0.000035
+4192a895485b05778d739bab gpu_widths loaded_idle qwen2b         256    0       cpu    0.000032
+4192a895485b05778d739bab gpu_widths loaded_idle qwen2b         256    0       gpu    0.000053
+4192a895485b05778d739bab gpu_widths loaded_idle qwen2b         256    0       ram    0.000066
+41edab56ea5c6442f9772f03 gpu_widths loaded_idle qwen2b           1    1       cpu    0.000032
+41edab56ea5c6442f9772f03 gpu_widths loaded_idle qwen2b           1    1       gpu    0.000053
+41edab56ea5c6442f9772f03 gpu_widths loaded_idle qwen2b           1    1       ram    0.000065
+48229b8f14c9ca202ba82ac5 gpu_widths device_idle  joey1         256    1       cpu    0.000021
+48229b8f14c9ca202ba82ac5 gpu_widths device_idle  joey1         256    1       gpu    0.000016
+48229b8f14c9ca202ba82ac5 gpu_widths device_idle  joey1         256    1       ram    0.000043
+4b43610cc70585751f6f37ca gpu_widths device_idle  joey1           4    2       cpu    0.000021
+4b43610cc70585751f6f37ca gpu_widths device_idle  joey1           4    2       gpu    0.000015
+4b43610cc70585751f6f37ca gpu_widths device_idle  joey1           4    2       ram    0.000043
+4d602cfc9b2636410e64682e gpu_widths   inference  joey1           4    1       cpu    0.000023
+4d602cfc9b2636410e64682e gpu_widths   inference  joey1           4    1       gpu    0.000200
+4d602cfc9b2636410e64682e gpu_widths   inference  joey1           4    1       ram    0.000047
+50ccfebcfe3e33d335064e7a gpu_widths loaded_idle  joey1           1    2       cpu    0.000032
+50ccfebcfe3e33d335064e7a gpu_widths loaded_idle  joey1           1    2       gpu    0.000050
+50ccfebcfe3e33d335064e7a gpu_widths loaded_idle  joey1           1    2       ram    0.000065
+52d353d44e700ca7492ca213 gpu_widths   inference  joey1          16    1       cpu    0.000036
+52d353d44e700ca7492ca213 gpu_widths   inference  joey1          16    1       gpu    0.000305
+52d353d44e700ca7492ca213 gpu_widths   inference  joey1          16    1       ram    0.000073
+5356b0fbc8c641c6d74296e7 gpu_widths device_idle  joey1          16    2       cpu    0.000021
+5356b0fbc8c641c6d74296e7 gpu_widths device_idle  joey1          16    2       gpu    0.000023
+5356b0fbc8c641c6d74296e7 gpu_widths device_idle  joey1          16    2       ram    0.000043
+540837a76e89a50feebb6d8d gpu_widths   inference qwen2b         256    0       cpu    0.000017
+540837a76e89a50feebb6d8d gpu_widths   inference qwen2b         256    0       gpu    0.000147
+540837a76e89a50feebb6d8d gpu_widths   inference qwen2b         256    0       ram    0.000035
+57b0ab13621c42360b72b63c gpu_widths   inference qwen2b          16    1       cpu    0.000019
+57b0ab13621c42360b72b63c gpu_widths   inference qwen2b          16    1       gpu    0.000162
+57b0ab13621c42360b72b63c gpu_widths   inference qwen2b          16    1       ram    0.000037
+5bbc5ae4d94959cde717ddc5 gpu_widths loaded_idle  joey1          16    0       cpu    0.000032
+5bbc5ae4d94959cde717ddc5 gpu_widths loaded_idle  joey1          16    0       gpu    0.000052
+5bbc5ae4d94959cde717ddc5 gpu_widths loaded_idle  joey1          16    0       ram    0.000066
+5e886c33074008f13e0596a7 gpu_widths   inference  joey1           4    0       cpu    0.000023
+5e886c33074008f13e0596a7 gpu_widths   inference  joey1           4    0       gpu    0.000196
+5e886c33074008f13e0596a7 gpu_widths   inference  joey1           4    0       ram    0.000046
+5f318f7267ebecc47a2673d7 gpu_widths   inference qwen2b           1    2       cpu    0.000027
+5f318f7267ebecc47a2673d7 gpu_widths   inference qwen2b           1    2       gpu    0.000246
+5f318f7267ebecc47a2673d7 gpu_widths   inference qwen2b           1    2       ram    0.000054
+65c14f4cb642252ff4bce198 gpu_widths device_idle  joey1           4    0       cpu    0.000021
+65c14f4cb642252ff4bce198 gpu_widths device_idle  joey1           4    0       gpu    0.000018
+65c14f4cb642252ff4bce198 gpu_widths device_idle  joey1           4    0       ram    0.000043
+66a7ad8e3e7159e0c96606b2 gpu_widths   inference  joey1           4    2       cpu    0.000023
+66a7ad8e3e7159e0c96606b2 gpu_widths   inference  joey1           4    2       gpu    0.000205
+66a7ad8e3e7159e0c96606b2 gpu_widths   inference  joey1           4    2       ram    0.000045
+674873a89da69b73905ab888 gpu_widths   inference  joey1           1    2       cpu    0.000034
+674873a89da69b73905ab888 gpu_widths   inference  joey1           1    2       gpu    0.000300
+674873a89da69b73905ab888 gpu_widths   inference  joey1           1    2       ram    0.000069
+6810aa442253cbf3b6496401 gpu_widths loaded_idle  joey1           1    1       cpu    0.000032
+6810aa442253cbf3b6496401 gpu_widths loaded_idle  joey1           1    1       gpu    0.000046
+6810aa442253cbf3b6496401 gpu_widths loaded_idle  joey1           1    1       ram    0.000066
+718541f4487a413aa301e954 gpu_widths device_idle  joey1           4    1       cpu    0.000021
+718541f4487a413aa301e954 gpu_widths device_idle  joey1           4    1       gpu    0.000022
+718541f4487a413aa301e954 gpu_widths device_idle  joey1           4    1       ram    0.000043
+73b1afeb5a0758a85fe01f0d gpu_widths   inference  joey1         256    0       cpu    0.000118
+73b1afeb5a0758a85fe01f0d gpu_widths   inference  joey1         256    0       gpu    0.000577
+73b1afeb5a0758a85fe01f0d gpu_widths   inference  joey1         256    0       ram    0.000240
+73dd02d58a1c78b61cd36d74 gpu_widths   inference  joey1          64    2       cpu    0.000075
+73dd02d58a1c78b61cd36d74 gpu_widths   inference  joey1          64    2       gpu    0.000527
+73dd02d58a1c78b61cd36d74 gpu_widths   inference  joey1          64    2       ram    0.000151
+745d1dd96ca60ffa369e8973 gpu_widths loaded_idle  joey1          16    2       cpu    0.000032
+745d1dd96ca60ffa369e8973 gpu_widths loaded_idle  joey1          16    2       gpu    0.000051
+745d1dd96ca60ffa369e8973 gpu_widths loaded_idle  joey1          16    2       ram    0.000066
+7b39b3957d0b50f69383e28a gpu_widths device_idle qwen2b           1    2       cpu    0.000021
+7b39b3957d0b50f69383e28a gpu_widths device_idle qwen2b           1    2       gpu    0.000020
+7b39b3957d0b50f69383e28a gpu_widths device_idle qwen2b           1    2       ram    0.000043
+7b89ea04e43b239f4ca4c3f8 gpu_widths   inference  joey1          16    2       cpu    0.000036
+7b89ea04e43b239f4ca4c3f8 gpu_widths   inference  joey1          16    2       gpu    0.000325
+7b89ea04e43b239f4ca4c3f8 gpu_widths   inference  joey1          16    2       ram    0.000072
+841005770d96cc14a82dda6e gpu_widths device_idle qwen2b          64    1       cpu    0.000021
+841005770d96cc14a82dda6e gpu_widths device_idle qwen2b          64    1       gpu    0.000015
+841005770d96cc14a82dda6e gpu_widths device_idle qwen2b          64    1       ram    0.000043
+87b4cd100b74858872d2dc5e gpu_widths device_idle qwen2b           1    1       cpu    0.000021
+87b4cd100b74858872d2dc5e gpu_widths device_idle qwen2b           1    1       gpu    0.000020
+87b4cd100b74858872d2dc5e gpu_widths device_idle qwen2b           1    1       ram    0.000043
+8a5fad6dcdceb2875e4e343e gpu_widths device_idle qwen2b          16    0       cpu    0.000021
+8a5fad6dcdceb2875e4e343e gpu_widths device_idle qwen2b          16    0       gpu    0.000015
+8a5fad6dcdceb2875e4e343e gpu_widths device_idle qwen2b          16    0       ram    0.000043
+8aa12e8882cfcf2248412e10 gpu_widths loaded_idle qwen2b           4    0       cpu    0.000032
+8aa12e8882cfcf2248412e10 gpu_widths loaded_idle qwen2b           4    0       gpu    0.000051
+8aa12e8882cfcf2248412e10 gpu_widths loaded_idle qwen2b           4    0       ram    0.000066
+8aa5d6bbcbfaff42d70d830e gpu_widths loaded_idle  joey1         256    0       cpu    0.000032
+8aa5d6bbcbfaff42d70d830e gpu_widths loaded_idle  joey1         256    0       gpu    0.000051
+8aa5d6bbcbfaff42d70d830e gpu_widths loaded_idle  joey1         256    0       ram    0.000066
+8aab13fb9ca8410b90214c31 gpu_widths device_idle  joey1         256    0       cpu    0.000021
+8aab13fb9ca8410b90214c31 gpu_widths device_idle  joey1         256    0       gpu    0.000021
+8aab13fb9ca8410b90214c31 gpu_widths device_idle  joey1         256    0       ram    0.000043
+918140a0a52983d53810bc58 gpu_widths device_idle qwen2b         256    0       cpu    0.000021
+918140a0a52983d53810bc58 gpu_widths device_idle qwen2b         256    0       gpu    0.000019
+918140a0a52983d53810bc58 gpu_widths device_idle qwen2b         256    0       ram    0.000043
+a13a9f0a0628c03594511573 gpu_widths device_idle  joey1          64    2       cpu    0.000021
+a13a9f0a0628c03594511573 gpu_widths device_idle  joey1          64    2       gpu    0.000019
+a13a9f0a0628c03594511573 gpu_widths device_idle  joey1          64    2       ram    0.000043
+a14c9e529bcaee3563373740 gpu_widths   inference qwen2b          16    0       cpu    0.000019
+a14c9e529bcaee3563373740 gpu_widths   inference qwen2b          16    0       gpu    0.000161
+a14c9e529bcaee3563373740 gpu_widths   inference qwen2b          16    0       ram    0.000038
+a5ad7a7800a57fbaf4586ea0 gpu_widths loaded_idle qwen2b         256    2       cpu    0.000032
+a5ad7a7800a57fbaf4586ea0 gpu_widths loaded_idle qwen2b         256    2       gpu    0.000052
+a5ad7a7800a57fbaf4586ea0 gpu_widths loaded_idle qwen2b         256    2       ram    0.000065
+a6122910bb190b6a70f50625 gpu_widths device_idle  joey1           1    2       cpu    0.000021
+a6122910bb190b6a70f50625 gpu_widths device_idle  joey1           1    2       gpu    0.000021
+a6122910bb190b6a70f50625 gpu_widths device_idle  joey1           1    2       ram    0.000043
+aef0f43386adeb0db1ccd816 gpu_widths loaded_idle  joey1          64    1       cpu    0.000032
+aef0f43386adeb0db1ccd816 gpu_widths loaded_idle  joey1          64    1       gpu    0.000051
+aef0f43386adeb0db1ccd816 gpu_widths loaded_idle  joey1          64    1       ram    0.000064
+b10d02ca894357ec9c340315 gpu_widths device_idle qwen2b         256    2       cpu    0.000021
+b10d02ca894357ec9c340315 gpu_widths device_idle qwen2b         256    2       gpu    0.000020
+b10d02ca894357ec9c340315 gpu_widths device_idle qwen2b         256    2       ram    0.000043
+b3b8e6c4cac982c3e5da98e8 gpu_widths   inference qwen2b           1    1       cpu    0.000028
+b3b8e6c4cac982c3e5da98e8 gpu_widths   inference qwen2b           1    1       gpu    0.000241
+b3b8e6c4cac982c3e5da98e8 gpu_widths   inference qwen2b           1    1       ram    0.000057
+b73b562695fda45f70317c8c gpu_widths device_idle qwen2b           4    1       cpu    0.000021
+b73b562695fda45f70317c8c gpu_widths device_idle qwen2b           4    1       gpu    0.000020
+b73b562695fda45f70317c8c gpu_widths device_idle qwen2b           4    1       ram    0.000043
+b7f2661ef62169d9aabb1a32 gpu_widths device_idle  joey1          16    1       cpu    0.000021
+b7f2661ef62169d9aabb1a32 gpu_widths device_idle  joey1          16    1       gpu    0.000020
+b7f2661ef62169d9aabb1a32 gpu_widths device_idle  joey1          16    1       ram    0.000043
+b93bb29c753f84bea4cdd84c gpu_widths device_idle qwen2b           4    2       cpu    0.000021
+b93bb29c753f84bea4cdd84c gpu_widths device_idle qwen2b           4    2       gpu    0.000019
+b93bb29c753f84bea4cdd84c gpu_widths device_idle qwen2b           4    2       ram    0.000043
+bb97ec3fdadf45e5058bfc3e gpu_widths   inference qwen2b          64    1       cpu    0.000018
+bb97ec3fdadf45e5058bfc3e gpu_widths   inference qwen2b          64    1       gpu    0.000156
+bb97ec3fdadf45e5058bfc3e gpu_widths   inference qwen2b          64    1       ram    0.000035
+bcd63e97432cff10fe8defbc gpu_widths   inference qwen2b          16    2       cpu    0.000019
+bcd63e97432cff10fe8defbc gpu_widths   inference qwen2b          16    2       gpu    0.000167
+bcd63e97432cff10fe8defbc gpu_widths   inference qwen2b          16    2       ram    0.000038
+bd191dba102e4a382a62f2aa gpu_widths loaded_idle  joey1         256    2       cpu    0.000032
+bd191dba102e4a382a62f2aa gpu_widths loaded_idle  joey1         256    2       gpu    0.000051
+bd191dba102e4a382a62f2aa gpu_widths loaded_idle  joey1         256    2       ram    0.000066
+be413896453ee83cb2b4929a gpu_widths   inference  joey1         256    2       cpu    0.000120
+be413896453ee83cb2b4929a gpu_widths   inference  joey1         256    2       gpu    0.000579
+be413896453ee83cb2b4929a gpu_widths   inference  joey1         256    2       ram    0.000242
+bfe6ed605f3d71becb017281 gpu_widths loaded_idle  joey1          64    2       cpu    0.000032
+bfe6ed605f3d71becb017281 gpu_widths loaded_idle  joey1          64    2       gpu    0.000049
+bfe6ed605f3d71becb017281 gpu_widths loaded_idle  joey1          64    2       ram    0.000066
+c1ab1832638cd838b5013cc2 gpu_widths loaded_idle qwen2b          64    0       cpu    0.000032
+c1ab1832638cd838b5013cc2 gpu_widths loaded_idle qwen2b          64    0       gpu    0.000052
+c1ab1832638cd838b5013cc2 gpu_widths loaded_idle qwen2b          64    0       ram    0.000066
+c46313b9477ad2075e1f2a5c gpu_widths loaded_idle  joey1         256    1       cpu    0.000032
+c46313b9477ad2075e1f2a5c gpu_widths loaded_idle  joey1         256    1       gpu    0.000051
+c46313b9477ad2075e1f2a5c gpu_widths loaded_idle  joey1         256    1       ram    0.000065
+c77bbea9e85d985fc7f13894 gpu_widths   inference  joey1          64    1       cpu    0.000053
+c77bbea9e85d985fc7f13894 gpu_widths   inference  joey1          64    1       gpu    0.000399
+c77bbea9e85d985fc7f13894 gpu_widths   inference  joey1          64    1       ram    0.000106
+c7db96bf452f2f97d29bbbd0 gpu_widths   inference qwen2b         256    1       cpu    0.000017
+c7db96bf452f2f97d29bbbd0 gpu_widths   inference qwen2b         256    1       gpu    0.000146
+c7db96bf452f2f97d29bbbd0 gpu_widths   inference qwen2b         256    1       ram    0.000033
+ca4b9484fa0493a0ded4ee59 gpu_widths device_idle qwen2b          64    0       cpu    0.000021
+ca4b9484fa0493a0ded4ee59 gpu_widths device_idle qwen2b          64    0       gpu    0.000019
+ca4b9484fa0493a0ded4ee59 gpu_widths device_idle qwen2b          64    0       ram    0.000043
+ceb59b655adcb1dae223d389 gpu_widths device_idle qwen2b          16    1       cpu    0.000021
+ceb59b655adcb1dae223d389 gpu_widths device_idle qwen2b          16    1       gpu    0.000021
+ceb59b655adcb1dae223d389 gpu_widths device_idle qwen2b          16    1       ram    0.000043
+cf102b172ba48d86d9775ac3 gpu_widths device_idle  joey1          16    0       cpu    0.000021
+cf102b172ba48d86d9775ac3 gpu_widths device_idle  joey1          16    0       gpu    0.000021
+cf102b172ba48d86d9775ac3 gpu_widths device_idle  joey1          16    0       ram    0.000043
+d2acd6c813f11be875b98b4a gpu_widths device_idle  joey1           1    0       cpu    0.000021
+d2acd6c813f11be875b98b4a gpu_widths device_idle  joey1           1    0       gpu    0.000017
+d2acd6c813f11be875b98b4a gpu_widths device_idle  joey1           1    0       ram    0.000043
+d4a03ef31593758023ec28b3 gpu_widths device_idle  joey1           1    1       cpu    0.000021
+d4a03ef31593758023ec28b3 gpu_widths device_idle  joey1           1    1       gpu    0.000015
+d4a03ef31593758023ec28b3 gpu_widths device_idle  joey1           1    1       ram    0.000043
+d77380e7a4b403243461a511 gpu_widths loaded_idle  joey1           4    0       cpu    0.000032
+d77380e7a4b403243461a511 gpu_widths loaded_idle  joey1           4    0       gpu    0.000049
+d77380e7a4b403243461a511 gpu_widths loaded_idle  joey1           4    0       ram    0.000066
+d8103b821bfa011776a965c7 gpu_widths loaded_idle  joey1           1    0       cpu    0.000032
+d8103b821bfa011776a965c7 gpu_widths loaded_idle  joey1           1    0       gpu    0.000052
+d8103b821bfa011776a965c7 gpu_widths loaded_idle  joey1           1    0       ram    0.000066
+d9f0efa06183cad1c79f6d4b gpu_widths loaded_idle  joey1          64    0       cpu    0.000032
+d9f0efa06183cad1c79f6d4b gpu_widths loaded_idle  joey1          64    0       gpu    0.000051
+d9f0efa06183cad1c79f6d4b gpu_widths loaded_idle  joey1          64    0       ram    0.000066
+dafe89edef0b5db789da386f gpu_widths loaded_idle  joey1           4    2       cpu    0.000032
+dafe89edef0b5db789da386f gpu_widths loaded_idle  joey1           4    2       gpu    0.000052
+dafe89edef0b5db789da386f gpu_widths loaded_idle  joey1           4    2       ram    0.000066
+dd71242e5b947de821c45e91 gpu_widths   inference qwen2b           4    0       cpu    0.000009
+dd71242e5b947de821c45e91 gpu_widths   inference qwen2b           4    0       gpu    0.000076
+dd71242e5b947de821c45e91 gpu_widths   inference qwen2b           4    0       ram    0.000019
+de8f0f223e293814657be52a gpu_widths   inference qwen2b           4    2       cpu    0.000008
+de8f0f223e293814657be52a gpu_widths   inference qwen2b           4    2       gpu    0.000069
+de8f0f223e293814657be52a gpu_widths   inference qwen2b           4    2       ram    0.000016
+ded224127c6a757e8de29e3d gpu_widths loaded_idle qwen2b         256    1       cpu    0.000032
+ded224127c6a757e8de29e3d gpu_widths loaded_idle qwen2b         256    1       gpu    0.000052
+ded224127c6a757e8de29e3d gpu_widths loaded_idle qwen2b         256    1       ram    0.000065
+df295d33fee106600d886956 gpu_widths loaded_idle qwen2b          64    1       cpu    0.000032
+df295d33fee106600d886956 gpu_widths loaded_idle qwen2b          64    1       gpu    0.000053
+df295d33fee106600d886956 gpu_widths loaded_idle qwen2b          64    1       ram    0.000066
+e068d27b4f945c40bd2035bc gpu_widths   inference  joey1           1    0       cpu    0.000034
+e068d27b4f945c40bd2035bc gpu_widths   inference  joey1           1    0       gpu    0.000294
+e068d27b4f945c40bd2035bc gpu_widths   inference  joey1           1    0       ram    0.000069
+e2e81aeb89d652f063b3ffb4 gpu_widths device_idle qwen2b         256    1       cpu    0.000021
+e2e81aeb89d652f063b3ffb4 gpu_widths device_idle qwen2b         256    1       gpu    0.000020
+e2e81aeb89d652f063b3ffb4 gpu_widths device_idle qwen2b         256    1       ram    0.000043
+ee38c9284fd3b9fc8e463931 gpu_widths loaded_idle  joey1           4    1       cpu    0.000032
+ee38c9284fd3b9fc8e463931 gpu_widths loaded_idle  joey1           4    1       gpu    0.000051
+ee38c9284fd3b9fc8e463931 gpu_widths loaded_idle  joey1           4    1       ram    0.000066
+f1a657aa0885ec2354485aca gpu_widths loaded_idle qwen2b           1    2       cpu    0.000032
+f1a657aa0885ec2354485aca gpu_widths loaded_idle qwen2b           1    2       gpu    0.000054
+f1a657aa0885ec2354485aca gpu_widths loaded_idle qwen2b           1    2       ram    0.000066
+f659ffb9160bb1fc6985dd6f gpu_widths device_idle qwen2b          64    2       cpu    0.000021
+f659ffb9160bb1fc6985dd6f gpu_widths device_idle qwen2b          64    2       gpu    0.000016
+f659ffb9160bb1fc6985dd6f gpu_widths device_idle qwen2b          64    2       ram    0.000043
+f712268cb8a0449a85670dd8 gpu_widths loaded_idle qwen2b          16    0       cpu    0.000032
+f712268cb8a0449a85670dd8 gpu_widths loaded_idle qwen2b          16    0       gpu    0.000051
+f712268cb8a0449a85670dd8 gpu_widths loaded_idle qwen2b          16    0       ram    0.000065
+fdefbb528910fa476fe60cbd gpu_widths device_idle  joey1          64    1       cpu    0.000021
+fdefbb528910fa476fe60cbd gpu_widths device_idle  joey1          64    1       gpu    0.000020
+fdefbb528910fa476fe60cbd gpu_widths device_idle  joey1          64    1       ram    0.000043
+fec0efb78cd1c8bec5c0b51c gpu_widths loaded_idle qwen2b           1    0       cpu    0.000032
+fec0efb78cd1c8bec5c0b51c gpu_widths loaded_idle qwen2b           1    0       gpu    0.000053
+fec0efb78cd1c8bec5c0b51c gpu_widths loaded_idle qwen2b           1    0       ram    0.000066
+fecd9c9f79423f3f1a860695 gpu_widths device_idle  joey1         256    2       cpu    0.000021
+fecd9c9f79423f3f1a860695 gpu_widths device_idle  joey1         256    2       gpu    0.000020
+fecd9c9f79423f3f1a860695 gpu_widths device_idle  joey1         256    2       ram    0.000043
+
+Wrote CSV tables:
+  /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/results/gpu_widths_01/runs.csv
+  /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/results/gpu_widths_01/trials.csv
+  /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/results/gpu_widths_01/class_quality.csv
+  /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/results/gpu_widths_01/energy_components.csv
+  /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/results/gpu_widths_01/energy_intensity.csv
+  /home/tcoignion/D04-Doctorat/10-19_Research/11_Experiments/11.08_BoAmps/sentiment_energy_benchmark/results/gpu_widths_01/performance.csv
+
+--- stderr ---

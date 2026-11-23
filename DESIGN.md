@@ -1,27 +1,41 @@
 # Experimental design and reporting protocol
 
+This is the benchmark's protocol reference. See [RESULTS.md](RESULTS.md) for
+measurements and [README.md](README.md) for setup and reproduction commands.
+
+## Protocol at a glance
+
+| Decision | Protocol |
+|---|---|
+| Comparison | Complete systems on the same TweetEval panel, not isolated model architectures |
+| Primary endpoints | Gross component J/submitted tweet, macro recall, throughput, and end-to-end latency |
+| Energy denominator | Actual tweet submissions across the full repeated workload |
+| Quality denominator | First pass only; later passes measure repeat disagreement |
+| Experimental unit | One measured run/repetition, not a tweet or pass |
+| Execution | Validated setup: measure directly; new host or relevant runtime/meter change: targeted readiness check |
+| Measurement boundary | CodeCarbon CPU/GPU/RAM with PUE 1; no wall-meter claim |
+
 ## 1. Objective and estimand
 
-The benchmark measures the quality, end-to-end serving performance, and
-CodeCarbon-estimated CPU/GPU/RAM energy of complete systems performing the same
-TweetEval sentiment task. A **system condition** includes the model checkpoint,
-runtime/engine and version, adapter, input format, output/readout mechanism,
-decoding or choice settings, precision/quantization, hardware, workload width,
-cache settings, and software environment.
+The benchmark measures quality, end-to-end serving performance, and
+CodeCarbon-estimated CPU/GPU/RAM energy for complete systems performing the
+same sentiment task. A **system condition** includes:
+
+- checkpoint, runtime/engine and version, adapter, and software environment;
+- input format, output/readout mechanism, and decoding or choice settings;
+- precision, hardware, workload width, and cache settings.
 
 The primary estimand is run-level gross component energy per submitted tweet
-for a fixed, documented inference workload, accompanied by macro recall,
-macro-F1, accuracy, coverage, throughput, and end-to-end latency. Idle-adjusted
-energy is secondary and remains separately labelled. Training and calibration
-energy are distinct workload kinds, not inference energy.
+for a fixed inference workload. Report it with macro recall, macro-F1, accuracy,
+coverage, throughput, and end-to-end latency. Idle-adjusted energy is secondary
+and separately labelled; training and calibration are separate workload kinds.
 
-This is not a model-only comparison when engines or output mechanisms differ.
-No result may be used to claim an energy effect of architecture alone unless all
-other condition elements are genuinely comparable.
+Do not make an architecture-only causal claim when engines, interfaces,
+hardware, or other condition elements differ.
 
-## 2. Reproducibility cards
+## 2. Fixed conditions
 
-### 2.1 Client and analysis environment
+### 2.1 Software and measurement environment
 
 | Field | Pin/protocol |
 |---|---|
@@ -31,270 +45,262 @@ other condition elements are genuinely comparable.
 | pandas / Altair / marimo | 3.1.1 / 6.3.0 / 0.25.2 |
 | scikit-learn / fastText wheel | 1.9.1 / 0.9.2 |
 | JSON Schema / referencing | 4.26.0 / 0.37.0 |
-| Native BoAmps schema | BoAmps commit `af1680c56ce2cefd5777fcac1c57591b685d6be5` |
+| BoAmps schema commit | `af1680c56ce2cefd5777fcac1c57591b685d6be5` |
 | Native BoAmps format | `formatVersion=0.1` |
 
-The resolved interpreter, package versions, thread environment, CPU affinity,
-host platform, power settings where observable, and GPU metadata are captured in
-run artifacts. GPU engine dependencies have separate pinned environments; they
-must not silently drift with the client environment.
+Artifacts capture the resolved interpreter, packages, thread environment, CPU
+affinity, host/power metadata where observable, and GPU metadata. GPU engines
+use separate pinned environments:
 
-### 2.2 Dataset card
+- [setup/gpu/README.md](setup/gpu/README.md): vLLM installation and snapshots.
+- [qev_setup/README.md](qev_setup/README.md): QEV reference setup.
+- [qev_setup/RUNTIME_SMOKE.md](qev_setup/RUNTIME_SMOKE.md): actual Joey runtime
+  evidence and deviations.
+
+### 2.2 Dataset
 
 | Field | Value |
 |---|---|
-| Task | TweetEval sentiment, three-class single-label text classification |
-| Source | <https://github.com/cardiffnlp/tweeteval> |
-| Revision | `4fbd22cd78421f05b1ecdb4fc5725bc7a7bd8f66` |
-| Labels and order | `negative`, `neutral`, `positive` (integer IDs 0, 1, 2) |
-| Train / validation / test sizes | 45,615 / 2,000 / 12,284 |
-| Integrity | Per-file SHA-256 in `setup/inputs.sha256`, rechecked by the offline adapter |
-| Full-phase test panel | 257 distinct zero-based test IDs, sampled with seed 1729 and sorted |
-| Warmup panel | 17 validation IDs, sampled using seed 1730 and sorted |
-| GPU pilot panel | 49 test IDs, same panel-selection rule and configured seed |
-| CPU pilot panel | 65 test IDs, same panel-selection rule and configured seed |
+| Task | TweetEval sentiment, three-class single-label classification |
+| Source / revision | <https://github.com/cardiffnlp/tweeteval> at `4fbd22cd78421f05b1ecdb4fc5725bc7a7bd8f66` |
+| Label order | `negative`, `neutral`, `positive` (IDs 0, 1, 2) |
+| Train / validation / test | 45,615 / 2,000 / 12,284 rows |
+| Integrity | Per-file SHA-256 in `setup/inputs.sha256`, rechecked offline |
+| Full test panel | 257 distinct zero-based IDs, seed 1729, sorted |
+| Warmup panel | 17 validation IDs, derived seed 1730, sorted |
+| Legacy GPU / CPU pilot panels | 49 / 65 test IDs, historical; same selection rule and configured seeds |
 
-The manifest retains selected test IDs, warmup validation IDs, file hashes,
-panel hash, split sizes, label order, seed, and class support. All systems in a
-phase see the same panel and order. Training uses only the training split.
-Validation supplies warmup rows and would be the only permitted split for any
-future prompt/hyperparameter selection; the current classical configuration
-performs no validation-based tuning. Test predictions and quality are reserved
-for final evaluation of the fixed condition.
+Every system in a phase sees the same panel and order. Manifests retain selected
+IDs, file and panel hashes, split sizes, labels, seeds, and class support.
 
-TweetEval source terms and potential restrictions must be reviewed before
-redistribution. Selected IDs and hashes provide reproducibility without
-redefining the upstream dataset license.
+- **Training:** training split only.
+- **Validation:** warmup rows; the only split permitted for future prompt or
+  hyperparameter selection. Current conditions perform no validation tuning.
+- **Test:** evaluation of fixed conditions only.
 
-### 2.3 Model and engine cards
+Review TweetEval terms before redistribution.
 
-| Family | Systems | Runtime and condition | Independent width support |
+### 2.3 Models and engines
+
+| Family | Systems | Runtime | Baseline independent width |
 |---|---|---|---|
-| Traditional | TF-IDF + linear SVM; TF-IDF + multinomial NB | scikit-learn 1.9.1; from-scratch train-split fit; resolved TF-IDF/estimator settings persisted | Static groups 1 and 16 |
-| Small neural baseline | fastText | fasttext-wheel 0.9.2; from scratch, single thread, no pretrained vectors or autotuning | Static groups 1 and 16 |
-| Generative Qwen | Qwen3.5 2B, 9B, and conditionally 27B | vLLM 0.19.0, BF16, no quantization, deterministic one-label generation | Closed-loop independent requests 1 and 16 |
-| Decision | Joey-1, Elephant-1, and conditionally Mammoth-1 | Model-specific pinned local snapshot in patched OneJev QEV reference runtime; structured three-way choice | 1 only |
+| Traditional | TF–IDF + linear SVM; TF–IDF + multinomial NB | scikit-learn 1.9.1, from-scratch train-split fit | Static groups 1 and 16 |
+| Small neural | fastText | fasttext-wheel 0.9.2, single thread, no pretrained vectors or autotuning | Static groups 1 and 16 |
+| Generative | Qwen3.5 2B, 9B, conditionally 27B | vLLM 0.19.0, BF16, deterministic one-label generation | Closed-loop requests 1 and 16 |
+| Decision | Joey-1, Elephant-1, conditionally Mammoth-1 | Pinned local snapshot in patched OneJev QEV | 1 |
 
-The exact Hub repository/revision, resolved local snapshot, weight metadata,
-adapter settings, and any recorded skip are authoritative in `experiment.json`
-and the run manifest. The generative pins are `Qwen/Qwen3.5-2B` at
-`15852e8c16360a2fea060d615a32b45270f8a8fc`, `Qwen/Qwen3.5-9B` at
-`c202236235762e1c871ad0ccb60c8ee5ba337b9a`, and `Qwen/Qwen3.5-27B` at
-`81a287ca484a5e71148f5beb7f367bb5286d70f9`. Larger models enter only after a
-memory/runtime pilot. Preflight weight-byte fit is not proof of successful
-runtime fit.
+Exact checkpoint revisions:
 
-The SVM and fastText conditions are **baseline variants**, not claims of exact
-TweetEval-paper reproduction: this SVM configuration does not implement the
-published word-plus-character recipe, and fastText does not use the published
-pretrained Twitter embeddings.
-
-#### vLLM generative card
-
-The primary vLLM condition fixes:
-
-- engine 0.19.0, one visible GPU, BF16, no quantization or implicit offload;
-- temperature 0, `top_p=1`, fixed seed, at most 8 output tokens;
-- thinking disabled and a short instruction to answer exactly one of the three
-  labels;
-- `max_model_len=1024`, `max_num_seqs=16`, one server on loopback;
-- cross-request prefix caching disabled (`--no-enable-prefix-caching`), with no
-  complete-input or prediction cache across repetitions;
-- closed-loop groups: all independent requests in a group finish before the
-  next group is submitted; final partial groups remain visible in predictions.
-
-A cache-enabled, thinking-enabled, quantized, different-precision, multi-GPU,
-or alternative-engine condition would require a new explicit label and could
-not be pooled with the primary condition.
-
-#### QEV decision card
-
-| Model | Exact revision |
+| Model | Revision |
 |---|---|
+| `Qwen/Qwen3.5-2B` | `15852e8c16360a2fea060d615a32b45270f8a8fc` |
+| `Qwen/Qwen3.5-9B` | `c202236235762e1c871ad0ccb60c8ee5ba337b9a` |
+| `Qwen/Qwen3.5-27B` | `81a287ca484a5e71148f5beb7f367bb5286d70f9` |
 | `baselabs/joey-1` | `db5c2a631f2da93c4173378438d8246966e25159` |
 | `baselabs/elephant-1` | `2e80345f1e41b2c1eaff8ae2538c0ac657210c44` |
 | `baselabs/mammoth-1` | `858aab610d4d124315ebf72d2f36c5e7341f758f` |
 
-The reference setup uses OneJev commit
-`81ce62f1597c91e46767d4d02d6ac2e18534fe94`, checkpoint patch git blob
+The selected configuration and run manifest are authoritative for snapshots,
+weights, adapter settings, and skips. On an unvalidated setup, larger models
+require fit and prediction readiness checks; weight-byte fit alone is
+insufficient.
+
+The SVM and fastText systems are **baseline variants**, not exact TweetEval
+paper reproductions: the SVM lacks the published word-plus-character recipe,
+and fastText lacks the published pretrained Twitter embeddings.
+
+#### vLLM condition
+
+The primary condition fixes:
+
+- one visible GPU, BF16, no quantization or implicit offload;
+- temperature 0, `top_p=1`, fixed seed, at most 8 output tokens;
+- thinking disabled, `max_model_len=1024`, `max_num_seqs=16`;
+- one loopback server and cross-request prefix caching disabled;
+- no complete-input or prediction cache across repetitions.
+
+Closed-loop groups finish before the next group starts; final partial groups
+remain visible. The `gpu_widths` extension uses client bursts of 1, 4, 16, 64,
+and 256 with the same scheduler cap of 16. Wider bursts can queue: they are not
+wider GPU batches or evidence of simultaneous execution.
+
+Any cache, thinking, precision, quantization, GPU-topology, or engine change is
+a separate condition.
+
+#### QEV condition
+
+The reference setup pins OneJev commit
+`81ce62f1597c91e46767d4d02d6ac2e18534fe94`, checkpoint `serve.patch` blob
 `7a432e8d254a9838b04ca3a155547ec3b3c70e78`, BF16 weights, the reference FP32
-output head, and the model cards' pinned environment constraints. Local
-snapshots are mandatory because loading only a Hub ID can omit the checkpoint's
-block-bidirectional attention and `slot_lm` overrides.
+output head, and checkpoint-specific environment constraints.
 
-The fixed structured choice uses raw tweet text as state, the pinned sentiment
-question and option descriptions, label order negative/neutral/positive, and
-`debias=1`. A different debiasing or prompt is another condition. QEV's branch
-batching concerns options for one state; it is not a 16-tweet batch and tweets
-must never be concatenated to simulate one.
+Local snapshots are mandatory: loading only a Hub ID can omit the checkpoint's
+block-bidirectional attention and `slot_lm` overrides. The QEV setup guide gives
+the provenance and acceptance checklist.
 
-Before measurement, inspect the worker evidence and verify: exact OneJev HEAD;
-applied patch; local config/readout blobs; block-bidirectional full attention
-and causal linear attention; `slot_lm`; permitted attention implementation;
-unique answer slots; and a fixed smoke classification. See
-`qev_setup/README.md` for the full provenance and acceptance checklist.
+The baseline structured choice uses:
 
-#### Optional cross-engine experiment
+- raw tweet text as state and the pinned sentiment question/options;
+- label order negative/neutral/positive and `debias=1`;
+- one independent tweet per request. Batching question branches for one state
+  is not independent-tweet batching.
 
-Running a decision checkpoint under vLLM is a separate cross-engine experiment,
-not a drop-in replication. First verify model-specific attention and readout,
-then compare labels and probabilities with the reference runtime on a fixed
-sample. Label artifacts with both engine and reference-comparison outcome and
-never pool them with primary QEV or generative-vLLM conditions.
+The `gpu_widths` extension instead opts Joey into **packed requests**: one
+shared, numbered tweet list with one targeted choice question per tweet.
+Singleton groups retain the baseline request. QEV may batch or chunk branches
+within an envelope, but does not batch independent states.
 
-## 3. Phases, workloads, and repetitions
+Packing places other tweets in every answer's context, so it can change quality.
+It is a distinct workload, not a transparent speedup. Exact tokenizer checks
+reject envelopes exceeding the model-card branch limit or either runtime limit
+before measurement; there is no truncation.
 
-### 3.1 Planned phase matrix
+Running a decision checkpoint under vLLM is a separate cross-engine experiment.
+It requires attention/readout verification and fixed-sample label/probability
+comparisons with the reference runtime; its results cannot be pooled with the
+primary conditions.
 
-The validated `experiment.json` is authoritative. Initial planned values are:
+## 3. Workloads and experimental units
 
-| Phase | Models | Test panel | Repetitions | Initial inference passes per supported width |
+### 3.1 Phases and fixed pass counts
+
+The selected JSON configuration is authoritative. The named `gpu_pilot` and
+`cpu_pilot` phases are legacy definitions, not required execution steps. Their
+profiles, artifacts, and findings remain historical engineering evidence, not
+prerequisites or quantitative results. Initial values in `experiment.json`
+are:
+
+| Phase | Models | Panel | Reps | Initial inference passes, width 1 / 16 |
 |---|---|---:|---:|---|
-| `gpu_pilot` | Qwen 2B + Joey-1 | 49 | 1 | Qwen 2B: 3 at width 1 and 2 at width 16; Joey-1: 3 at width 1 |
-| `cpu_pilot` | SVM, NB, fastText | 65 | 1 | SVM/NB: 450 at width 1, 4000 at width 16; fastText: 1000/1000 |
-| `full` | All nine configured systems, subject to recorded fit/support skips | 257 | 3 | vLLM systems: 2/4; QEV systems: 1 at width 1; SVM/NB: 200/1200; fastText: 1000/1000 |
+| `gpu_pilot` | Qwen 2B + Joey-1 | 49 | 1 | Qwen: 3/2; Joey: 3/unsupported |
+| `cpu_pilot` | SVM, NB, fastText | 65 | 1 | SVM/NB: 450/4000; fastText: 1000/1000 |
+| `full` | Nine systems, subject to fit/support skips | 257 | 3 | vLLM: 2/4; QEV: 1/unsupported; SVM/NB: 200/1200; fastText: 1000/1000 |
 
-Pass counts are nested by model and stringified width, for example
-`passes["svm"]["16"]`. They were chosen from preliminary timing estimates to
-obtain measurable windows; fastText and any other uncertain timing must be
-calibrated **before** the corresponding execution. Once execution starts, pass
-counts, panel, and conditions are fixed. Do not change them afterward to obtain
-a preferred energy or quality result.
+Pass counts are nested by model and stringified width. Choose them for
+measurable windows and fix them before execution; never tune them afterward to
+improve a result.
 
-The initial energy settings are `country_iso_code=FRA`, `sample_secs=1`,
-`gpu_ids=[0]`, and `min_samples=5`. Planned device-idle and loaded-idle windows
-are 8 s and 12 s, with a 5 s settling delay. Resolved values and actual
-durations are recorded per attempt. Current model-loaded idle trials are
-scheduled for CUDA systems; classical loaded-idle adapter names in the
-configuration do not create such a trial.
+Initial energy/calibration settings:
 
-The initial defaults are retained for provenance. After the CPU sampling
-pilot, the final laptop run used [the measured profile](profiles/laptop-full-isolated-02.json):
-0.2 s cadence with an isolated tracker, and 1,750 fastText passes at each width.
-The corrected [CPU pilot profile](profiles/laptop-cpu-isolated-02.json) uses the
-same sampler/cadence. These were timing and metering changes, not label-quality
-or prompt tuning; their artifact roots are distinct from the initial pilots.
+| Setting | Initial value |
+|---|---|
+| Country / GPUs | `country_iso_code=FRA`, `gpu_ids=[0]` |
+| Sampling | `sample_secs=1`, `min_samples=5` |
+| Device idle / loaded idle / settling | 8 s / 12 s / 5 s |
 
-Width 1 is the common primary workload. Width 16 is measured only where
-independent-tweet grouping is supported. One QEV choice is always one tweet.
-Actual group indices, widths, final partial groups, request counts, and pass
-indices are persisted.
+Resolved values and actual durations are recorded per attempt. Classical
+loaded-idle adapter names do not create a loaded-idle trial.
 
-### 3.2 Experimental unit and order
+Profile provenance remains explicit:
 
-A measured run/repetition is the energy experimental unit. Tweets within a run
-and repeated passes over the same panel are not independent energy replicates.
-Retain every repetition and summarize run-level variation; do not treat the
-larger number of tweet predictions as a larger energy sample size.
+- `profiles/laptop-full-isolated-02.json`: reported full-run condition with an
+  isolated tracker at 0.2 s and 1,750 fastText passes at each width.
+- `profiles/laptop-cpu-isolated-02.json`: historical engineering profile with
+  the same isolated sampler and cadence, not a prerequisite or result.
+- `profiles/laptop-gpu-widths.json`: authoritative follow-up width settings.
 
-The runner deterministically interleaves model/width/repetition blocks by
-`SHA256(seed, condition)`, with the condition as a tie-breaker, and records the
-block order in `plan.json`. Device idle, any training, loaded idle, and
-inference retain their dependency order within each block. Record actual
-execution order, clocks/temperatures/power limits where observable, and
-background-host state. Seeded interleaving reduces systematic condition-order
-effects but does not eliminate thermal or temporal confounding.
+Timing/metering changes use distinct artifact roots and do not tune labels or
+prompts. Width 1 is the common primary workload. Persist actual group
+indices/widths, final partial groups, request counts, and pass indices.
+
+### 3.2 Experimental unit and execution order
+
+A measured run/repetition is the energy experimental unit. Tweets and repeated
+passes within it are not independent energy replicates. Retain every repetition
+and summarize run-level variation.
+
+The runner interleaves model/width/repetition blocks deterministically by
+`SHA256(seed, condition)`, with condition as tie-breaker, and records the order
+in `plan.json`. Within a block, dependency order remains device idle → training
+where applicable → loaded idle → inference.
+
+Record actual order, clocks, temperatures, power limits, and background state
+where observable. Seeded interleaving reduces, but does not eliminate, order,
+thermal, and temporal confounding.
 
 ## 4. Execution protocol
 
-### 4.1 Host and preflight
+### 4.1 Ownership, preflight, and warmup
 
-1. Obtain the single runtime/measurement ownership handoff.
-2. Confirm the resolved lockfiles, dataset/schema hashes, local model snapshots,
-   exact revisions, engine paths, and output roots.
-3. Stop unrelated background activity. Record CPU affinity/thread variables,
-   CPU governor/preferences, AC state, memory, load, GPU IDs, driver, free/total
-   VRAM, power state/limit, temperature/clocks where available, and existing GPU
-   compute applications.
-4. Preflight weight bytes plus configured reserve before any GPU model download
-   or load. Refuse unsupported multi-GPU visibility or active competing GPU
-   work. Record a skip if the specified condition cannot run.
-5. Never silently quantize, offload, lower precision, replace a checkpoint, or
-   change hardware. Any explicit alternative becomes a different condition.
+1. Obtain exclusive runtime/measurement ownership and stop unrelated activity.
+2. Confirm lockfiles, hashes, snapshots, revisions, engine paths, and fresh
+   output roots. Record CPU/thread settings, power state, memory, load, GPU
+   inventory, free VRAM, and existing compute applications.
+3. Before a GPU download or load, preflight weight bytes plus reserve. Refuse
+   unsupported GPU visibility or competing work; record exact skips.
+4. Never silently quantize, offload, lower precision, substitute a checkpoint,
+   or change hardware. An explicit alternative is a new condition.
+5. Inspect engine logs and adapter metadata. After loading, warm up every model
+   and supported width with validation rows; record workload, duration,
+   stabilization, and cache state. Apply the section 9 readiness rule rather
+   than a mandatory pilot sequence.
 
-### 4.2 Setup, smoke checks, and warmup
+Warmup is excluded from steady-state energy and quality. Model loading and cold
+start are outside the primary boundary, not zero-energy events.
 
-Model construction is lazy. Model loading, training, engine startup, and smoke
-checks happen only during an authorized runtime phase. Inspect engine logs and
-resolved adapter metadata before accepting the run.
+### 4.2 Measured inference boundary
 
-For each model and each supported width, warm up after loading and before the
-steady-state measured window using the configured validation rows. Record
-warmup workload, duration, stabilization evidence, and cache state. Warmup is
-excluded from steady-state energy and quality. Model-loading/cold-start energy
-is outside the primary boundary unless a separately labelled measurement is
-later implemented; it is not zero.
+Use one fresh CodeCarbon `OfflineEmissionsTracker` per trial in machine tracking
+mode on the single host containing client and server. Resolve hardware, output
+methods, schema validation, and task metadata before measurement. The final
+meter uses `meter-worker/1` in a separate interpreter so its scheduler does not
+share the client interpreter.
 
-### 4.3 Measured inference bright line
+| Inside the timed window | Outside the timed window |
+|---|---|
+| Preprocessing and client queueing | Prediction serialization and audit |
+| Model and server execution | Quality scoring |
+| Output parsing into label/raw record | Report analysis |
+| Permitted request overhead and worker sampling | Model fitting/loading and warmup |
 
-Use one fresh CodeCarbon `OfflineEmissionsTracker` per measured trial in machine
-tracking mode on the single host containing both client and inference
-server. Resolve hardware metadata, output methods, schema validator, and task
-metadata before the bright line. The final meter uses `meter-worker/1`, a
-separate interpreter, so the scheduler does not share the client's Python
-interpreter. Preparation precedes measurement; `begin`/`end` handshakes bound
-only the work callback, not fitting, scoring, or file serialization for an
-inference trial. The worker's short handshakes and sampling load still fall
-within the machine-level energy boundary. `monitoring.json` preserves sampler
-mode, scheduled counts, tick gaps and tracker/work-window timing.
+The window starts immediately before the first request and ends after the last
+result completes and is parsed. Outside work retains separate
+`outside_window_s` timings. Worker handshakes and sampling load remain inside
+the machine-level energy boundary.
 
-The timed workload starts immediately before the first request and ends after
-the last result has completed and its output has been parsed into the adapter's
-label/raw record. It includes preprocessing, client/queueing, model execution,
-server work, output parsing, and any permitted request overhead. Prediction
-serialization, the persisted-prediction audit, scoring, and report analysis
-happen outside this window and retain separate `outside_window_s` timings.
+Additional rules:
 
-Persist monotonic-clock start/end and tracker start/stop overhead. The tracker
-uses `pue=1.0`; reported energy is the sum of estimated CodeCarbon components,
-not whole-system or wall-meter energy. The full host has no wall meter. Record
-whether an unused GPU remains powered and metered during CPU-only work.
+- Persist monotonic start/end and tracker overhead.
+- Use `pue=1.0`; energy is the estimated component sum, not wall energy.
+- Record whether an unused GPU remains powered and metered during CPU work.
+- Primary requests do not retry. Any future retry-enabled condition must keep
+  retries and energy in the same attempt and report retry counts.
 
-Retries are disabled in the primary request policy. If a future condition allows
-them, its requests and energy stay inside the same measured attempt and retry
-counts must be explicit.
+### 4.3 Interruption and immutability
 
-### 4.4 Interruption and immutability
-
-`state.json` and attempt histories are atomically persisted. SIGINT/SIGTERM or
-an abandoned running checkpoint produces an incomplete/recoverable state.
-Completed trials are immutable and never silently repeated or overwritten.
-Retries create fresh `attempt-NNNN` directories. Failed and skipped states need
-explicit retry flags; all prior logs and native artifacts remain available for
-audit.
+Atomically persist `state.json` and attempt histories. SIGINT/SIGTERM or an
+abandoned checkpoint produces an incomplete/recoverable state. Completed trials
+are never overwritten or silently repeated. Retries use fresh `attempt-NNNN`
+directories; failed and skipped states require explicit retry flags. Preserve
+all logs and native artifacts.
 
 ## 5. Energy measurements and calibration
 
-### 5.1 Component and gross energy
+### 5.1 Gross component energy
 
-Retain native CodeCarbon CPU, GPU, and RAM energies and total energy in kWh.
-An unavailable component is null, not zero; a detected zero and an unavailable
-measurement are different. Record actual measurement/estimation backends,
-included GPU indices, sample interval, source signature, and resolved hardware.
+Retain native CodeCarbon CPU, GPU, RAM, and total energies in kWh. Record
+backends, GPU indices, sample interval, source signature, and resolved hardware.
+An unavailable component is **null**, not zero.
 
-For inference with `N_submitted > 0`, gross intensity is:
+For `N_submitted > 0`:
 
 \[
 E_{gross} = \frac{3{,}600{,}000 \times E_{kWh}}{N_{submitted}}
 \quad \mathrm{J/submitted\ tweet}.
 \]
 
-`N_submitted` counts actual tweet submissions across the fixed panel and all
-passes, not API calls, groups, or only valid predictions. Keep completed, valid,
-and correct counts for alternative denominators. Native BoAmps
-`powerConsumption` is energy in kWh despite its name; do not reinterpret it as
-watts. For training results, the runner's legacy derived-intensity keys use
-training rows as the denominator; they are not tweet energy and are excluded
-from the notebook's per-tweet inference figure.
+`N_submitted` counts actual tweet submissions across the panel and all passes—
+not API calls, groups, envelopes, or valid predictions only. Keep completed,
+valid, and correct counts for explicitly labelled alternatives.
 
-### 5.2 Device-idle calibration
+Native BoAmps `powerConsumption` is energy in kWh despite its name. Training's
+legacy derived intensity uses training rows and must not be labelled tweet
+energy.
 
-A `device_idle` trial performs no model workload. It measures the same host and
-CodeCarbon source configuration for the configured duration, with device state,
-unused-GPU state, and background conditions recorded. Device idle is a
-calibration kind and never enters inference-quality figures.
+### 5.2 Idle adjustments
 
-For a compatible baseline with the same source signature, host identifier, and
+`device_idle` measures the same host/source configuration with no model
+workload. For a compatible baseline with the same source signature, host, and
 GPU UUID set:
 
 \[
@@ -303,239 +309,193 @@ E_{device-adjusted} = \frac{3{,}600{,}000}{N_{submitted}}
 \frac{T_{gross}}{T_{device}}\right).
 \]
 
-### 5.3 Model-loaded idle calibration
+`loaded_idle` loads the specified model/runtime but submits no inference. Apply
+analogous duration-scaled subtraction and label it
+`loaded_idle_adjusted_j_per_tweet`.
 
-A `loaded_idle` trial loads the specified model/runtime but submits no inference
-workload. Use the same model condition and compatible measurement source
-signature to estimate the additional idle baseline. Apply the analogous
-duration-scaled subtraction and label it `loaded_idle_adjusted_j_per_tweet`.
+- Never substitute device idle for loaded idle or pool baselines across models,
+  engines, hosts, GPU sets, or source signatures.
+- Without a compatible baseline, adjusted energy is null.
+- Retain signed values; negative results can expose mismatch or noise and must
+  not be clipped.
+- Keep gross, device-adjusted, and loaded-adjusted series separate. Device idle
+  never enters inference-quality figures.
 
-Do not substitute device idle for loaded idle or pool baselines across models,
-engines, hosts, GPU sets, or source signatures. If a matching baseline is absent
-or incompatible, the adjusted result is null. Signed adjusted values are retained:
-a negative value can expose baseline mismatch or measurement noise and must not
-be clipped to zero.
+### 5.3 Training boundary
 
-Gross, device-idle-adjusted, and loaded-idle-adjusted intensities are different
-measurement bases and must appear as separate series/table rows.
+Measure task-specific classical/fastText training as `training`, separately
+from inference and tuning. Record rows, parameters, threads, duration, and
+native artifacts. Qwen/decision pretraining is outside the boundary or
+unavailable, never zero. Include training in an inference ratio only under an
+explicit amortization assumption.
 
-### 5.4 Training and prior training
+## 6. Quality and performance
 
-Task-specific classical/fastText training is measured as `training`, separately
-from inference and any hyperparameter tuning. Record training rows, resolved
-parameters, threads, duration, and native energy artifacts. Pretraining energy
-for Qwen/decision models is outside the measured boundary or unavailable, never
-zero. No inference energy ratio should include training unless a separately
-defined amortization assumption is stated.
+### 6.1 Prediction audit and denominators
 
-## 6. Performance and quality scoring
+Every submitted tweet has a durable record containing test ID, gold label,
+prediction or null, raw output, completion state, latency and scope, pass index,
+group index, and actual width. Audit cardinality and panel/group order before
+acceptance.
 
-### 6.1 Persisted predictions and counts
+Report:
 
-Every submitted tweet produces a durable prediction record containing test ID,
-gold label, predicted label or null, raw output, completion state, latency and
-latency scope, pass index, group index, and actual group width. Cardinality and
-panel/group order are audited before a result is accepted.
-
-Report at least:
-
-- submitted, completed, valid, and correct tweet counts;
-- panel size, pass count, group count, and final group width;
-- retry requests (zero in the primary condition);
-- HTTP request count for vLLM and QEV choice count for QEV, as applicable;
+- submitted, completed, valid, and correct counts;
+- panel size, passes, groups, and final group width;
+- retries, vLLM HTTP requests, and applicable QEV choice/envelope counts;
 - repeat disagreements from the first pass.
 
 Invalid or missing predictions remain in the denominator and count as wrong.
-Coverage is the fraction with one of the three valid labels. A failure marker
-is never a fourth sentiment class.
+Coverage is the fraction with a valid three-class label; failure is not a fourth
+class.
 
-### 6.2 Quality basis
+Primary quality uses the **first pass only** (`basis_pass=0`,
+`basis_n=panel_size`) and is computed outside the energy window. Later passes
+diagnose disagreement, not additional independent quality observations.
 
-Quality is computed outside the energy window from persisted predictions. The
-primary basis is **first pass only** (`basis_pass=0`, `basis_n=panel_size`), so
-repeated energy passes do not replicate test labels or artificially change the
-quality denominator. Later passes are used for repeat-disagreement diagnostics,
-not pooled into primary quality.
+Report official TweetEval macro recall over negative/neutral/positive, plus
+macro-F1, per-class precision/recall/F1/support/predicted/correct, accuracy, and
+coverage. Interpret empty-denominator scoring with the panel support table. The
+quality–energy plot pairs first-pass macro recall with gross J/submitted tweet
+over the full repeated workload.
 
-Restrict macro averages to negative, neutral, and positive:
+### 6.2 Latency and throughput
 
-- macro recall across the three gold classes is the official TweetEval
-  sentiment metric;
-- also report macro-F1, per-class precision/recall/F1/support/predicted/correct,
-  accuracy, and coverage;
-- denominators with no predictions or no gold support use the runner's explicit
-  scoring rule and must be interpreted with the panel support table.
-
-The quality–energy plot therefore pairs first-pass macro recall with gross
-energy per actual submitted tweet over the full repeated workload.
-
-### 6.3 Latency and throughput
-
-End-to-end latency includes queueing. Persist adapter request latency when
-available; otherwise the fallback is closed-loop group completion and is
-labelled as such, not presented as per-tweet model latency. Report p50 and p95
-with their scope and completed-request basis. Group p50/p95 may be reported
-separately.
-
-Main throughput is:
+End-to-end latency includes queueing. Use adapter request latency when
+available; otherwise explicitly label closed-loop group completion as the
+fallback. Report p50/p95 with scope and completed-request basis.
 
 \[
 \mathrm{throughput}_{tweets/s} =
 \frac{N_{completed}}{T_{full\ measurement\ window}}.
 \]
 
-Valid throughput may additionally use `N_valid`, with an explicit denominator
-label. The runner's legacy `throughput_tweets_s` key contains training rows/s
-for a training result; analysis must not relabel that as tweet throughput, and
-the notebook's tweet-throughput figure is inference-only. Do not compare batch 1
-and batch 16 without showing actual grouping, final partial groups, engine
-scheduling settings, and latency scope.
+Valid throughput may use `N_valid` only with an explicit label. Training's
+legacy `throughput_tweets_s` contains training rows/s, not tweet throughput.
+
+For the GPU width sweep:
+
+- compare engines using group p95, one observation per closed-loop group;
+- do not repeat packed-request latency for every output;
+- report independent HTTP request p95 separately for vLLM;
+- show final partial groups and scheduler settings.
 
 ## 7. Native BoAmps export and verification
 
-Each measured trial emits both CodeCarbon CSV and native BoAmps JSON. Task
-metadata identifies inference/training/calibration stage, text-classification
-or device-idle family, actual request count, a nonempty algorithm array, and a
-nonempty dataset array with usage/type and source information. Calibration and
-task-specific training have native `nbRequest=0` (training row quantity remains
-in dataset metadata); inference may not silently substitute zero for a missing
-count.
+Every trial emits CodeCarbon CSV and native BoAmps JSON. Metadata identifies
+stage/task family, actual request count, a nonempty algorithm array, and a
+nonempty dataset array with usage/type and source.
 
-Verification is an acceptance gate, not a warning:
+Request-count rules:
 
-1. Exactly one native report exists and validates offline against the five
-   SHA-256-checked BoAmps schemas at the pinned commit.
-2. Local schema references resolve without network retrieval using the
-   upstream-declared Draft-04 dialect. For Draft-04 metaschema compatibility,
-   only `algorithm_schema.json`'s validation-inert `required: []` keyword is
-   omitted from the in-memory validator copy; source bytes and exports are
-   unchanged.
-3. Native format version is 0.1. Report ID, CSV run UUID, report filename, and
-   native header agree.
-4. Native and CSV duration and total energy agree within strict numeric
-   tolerance; total equals the detected component sum.
-5. Tracking mode, CodeCarbon version, expected task metadata, PUE, monitoring
-   metadata, and schema pin agree.
-6. Components without a detected monitoring source are represented as
-   unavailable in the derived result; invalid native output fails the pipeline.
-7. Inference meets the low-sampling gate: at least `min_samples=5` scheduled
-   CodeCarbon samples when the scheduled-sample counter is available, with the
-   duration-based proxy retained as supporting evidence. Short/low-sampling
-   trials remain explicitly flagged rather than silently accepted as precise.
-   The laptop execution also checked integration coverage against the observed
-   constant RAM power estimate (`3,600,000 × RAM kWh / (RAM W × native duration)`
-   ≥ 0.85 for inference); this is an internal consistency check for that
-   backend, not an accuracy guarantee or a test for variable-power RAM sensors.
+- Calibration and training use native `nbRequest=0`; inference may not replace
+  a missing count with zero.
+- Packed Joey counts request envelopes, including final partial groups, not
+  tweet decisions. The verifier checks envelope receipts in predictions.
+- Gross and adjusted J/tweet still divide by submitted tweets.
+- In vLLM, request and tweet counts coincide.
 
-Retain the native report, CSV, monitoring metadata, CodeCarbon log, predictions,
-resolved manifest, and schema pin together. Any later transformation required
-for BoAmps ingestion must preserve native units and be documented separately.
+Verification is an acceptance gate:
 
-## 8. Analysis and reporting rules
+1. Exactly one native report validates offline against five hash-checked BoAmps
+   schemas at the pinned commit, with local Draft-04 references. Only
+   `algorithm_schema.json`'s validation-inert `required: []` is omitted from
+   the in-memory validator copy for metaschema compatibility; source bytes and
+   exports are unchanged.
+2. Native format is 0.1; report ID, CSV UUID, filename, and native header agree.
+3. Native/CSV duration and total energy agree within strict tolerance; total
+   equals the detected component sum.
+4. Tracking mode, CodeCarbon version, task metadata, PUE, monitoring metadata,
+   and schema pin agree.
+5. Components without a detected source remain unavailable; invalid native
+   output fails the pipeline.
+6. Inference has at least `min_samples=5` scheduled samples when that counter
+   is available. Short/low-sampling trials remain flagged.
+7. The laptop run additionally checks fixed-RAM integration coverage:
+   `3,600,000 × RAM kWh / (RAM W × native duration) >= 0.85` for inference.
+   This checks backend consistency, not absolute accuracy or variable-power
+   RAM sensors.
 
-- Run `analysis.py` or `analysis_notebook.py` on one phase artifact root at a
-  time. Keep phase/kind labels if a later report deliberately combines roots.
-- Include all statuses, failed/incomplete artifacts, and recorded skips in the
-  run-status report. Successful figures require a readable active result and a
-  complete state.
-- Do not pool phases, workload kinds, models, widths, repetitions, datasets,
-  hosts, adapters, engines, precision, cache settings, or calibration bases.
-- Preserve individual runs and report run-level variation. Do not use tweets as
-  independent energy replicates.
-- Missing fields and unavailable components remain null. Missing data never
-  becomes zero for plotting or aggregation.
-- Keep gross and adjusted energy separate, inference separate from training and
-  calibration, and quality restricted to successful inference.
-- Show quality, energy components, energy intensity, throughput, and p50/p95
-  latency with model/width/phase/kind context. Include the quality–gross-energy
-  trade-off without implying causality.
-- Preserve exact raw artifacts alongside any figure, CSV, or aggregate. The
-  coordinator's separate results report must contain no fabricated or
-  placeholder values.
+Retain native reports, CSV, monitoring metadata, logs, predictions, manifests,
+and schema pins together. Later BoAmps transformations must preserve native
+units and be documented separately.
 
-## 9. Pilot and acceptance sequence
+## 8. Analysis and reporting
 
-### Gate A — offline implementation
+- Analyze one phase root at a time; label any deliberate join.
+- Keep phase, kind, model, width, repetition, host, engine, and condition.
+- Include failed/incomplete artifacts and skips in status reports. Successful
+  figures require a readable active result and complete state.
+- Preserve run-level variation; never treat tweets or passes as independent
+  energy replicates.
+- Keep missing values null and unavailable components distinct from zero.
+- Separate inference/training/calibration, gross/adjusted energy, and
+  request/group latency. Quality figures include successful inference only.
+- Show quality, components, intensity, throughput, and latency with condition
+  context. A quality–energy trade-off does not establish causality.
+- Preserve raw artifacts beside every figure, CSV, or aggregate. Never fabricate
+  or use placeholder results.
 
-- Locked client imports and offline tests pass.
-- Dataset/schema hashes and configuration validate.
-- Plans resolve the intended models, panels, widths, passes, repetitions,
-  calibrations, and output paths.
-- Analysis tests and synthetic/empty marimo export succeed without launching a
-  benchmark.
+## 9. Acceptance sequence
 
-### Gate B — GPU pilot
+The named `gpu_pilot` and `cpu_pilot` phases are not mandatory. Use one
+readiness rule:
 
-Run one generative Qwen and one QEV decision model. Before continuing:
+- **Validated setup:** proceed directly to the intended measurement.
+- **New host or relevant runtime/meter change:** run a short readiness check
+  scoped to what changed. Do not repeat unrelated pilots.
 
-- actual fit and peak-memory behavior are acceptable, with no silent condition
-  changes;
-- vLLM served revision and deterministic/output behavior are verified;
-- QEV attention, readout, patch, structured choice, and smoke outputs are
-  verified;
-- batch support matches the declared independent-tweet semantics;
-- warmup, steady-state windows, device/model-loaded idle calibrations, and
-  interruption/resumption behave as specified;
-- predictions audit and first-pass scoring succeed;
-- native BoAmps/CSV validation and actual workload counts pass;
-- analysis displays all metrics and missing components correctly.
+The readiness check must establish that:
 
-### Gate C — classical pilot
+1. Each intended affected model fits without silent condition changes and
+   returns valid predictions. Relevant engine/source, attention/readout, and
+   output checks still apply.
+2. The shortest planned measured window for each affected condition collects
+   adequate samples and shows no obvious under-integration. Faster hosts can
+   shorten windows, so a previously adequate longer window is not sufficient
+   evidence.
+3. Configuration, input integrity, native export, and prediction audits pass
+   for the affected path. Static tests and weight-byte preflight alone do not
+   establish runtime or measurement readiness.
 
-Add SVM, NB, and fastText. Verify training-only provenance, deterministic
-configuration where claimed, static groups at both widths, sufficient tracker
-sampling duration, persisted prediction quality, repeat behavior, native
-exports, and timing-based pass counts fixed before execution.
-
-### Gate D — full experiment
-
-Attempt all nine configured models and supported width conditions with three
-repetitions. Add 27B systems only after their memory/runtime pilots. Record any
-fit skip with its exact configuration and evidence. Complete verification and
-retain raw reports before beginning the results report.
+Every measured run retains its unloaded (`device_idle`) and applicable
+model-loaded (`loaded_idle`) calibrations as analysis baselines; these are not
+pilots. Complete the artifact verification in section 7 before reporting.
 
 ## 10. Limitations and threats to validity
 
-1. **Complete-system confounding.** Model, runtime, prompt/choice interface,
-   readout, hardware, and batching can vary together; energy differences are not
-   architecture-only causal effects.
-2. **Estimated boundary.** CodeCarbon CPU/GPU/RAM is a component estimate with
-   PUE 1, not whole-system energy. There is no wall meter on the full host.
-   RAM/CPU values may be model-based, and an unused powered GPU can affect CPU
-   runs.
-3. **Sampling and short windows.** Tracker interval and overhead can materially
-   affect fast classifiers. Timing-derived pass counts mitigate but do not remove
-   sampling error; report window durations and run variation.
-4. **Calibration instability.** Idle subtraction can be noisy or negative.
-   Duration scaling and source-signature matching do not eliminate temporal,
-   thermal, or model-loaded baseline mismatch.
-5. **Workload equivalence.** Static CPU groups, closed-loop vLLM bursts, and
-   single-choice QEV requests have different scheduling/readout semantics.
-   Client width does not prove an internal hardware batch of 16.
-6. **Repetition independence.** Repeated passes share tweets and a run; they are
-   not independent energy replicates. Seeded block interleaving reduces order
-   effects but cannot remove thermal, drift, or within-block dependency effects.
-7. **Baseline fidelity.** The SVM and fastText systems are variants, not exact
-   published TweetEval baselines. No validation tuning is currently performed.
+1. **Complete-system confounding.** Model, runtime, interface, readout, hardware,
+   and batching can vary together; differences are not architecture-only causal
+   effects.
+2. **Estimated boundary.** CodeCarbon CPU/GPU/RAM with PUE 1 is not whole-system
+   or wall energy. CPU/RAM values may be model-based; an unused powered GPU can
+   affect CPU trials.
+3. **Sampling.** Tracker interval and overhead can materially affect fast
+   classifiers. Fixed pass counts do not remove sampling error; report durations,
+   actual samples, and run variation.
+4. **Calibration.** Idle subtraction can be noisy or negative. Duration scaling
+   and signature matching do not remove temporal, thermal, or loaded-baseline
+   mismatch.
+5. **Workload equivalence.** Static CPU groups, independent vLLM bursts,
+   baseline QEV choices, and packed Joey envelopes have different scheduling,
+   context, and readout semantics. Client width does not prove hardware batching.
+6. **Dependence and order.** Repeated passes share tweets and a run. Seeded
+   interleaving cannot remove thermal, drift, or within-block dependencies.
+7. **Baseline fidelity and tuning.** SVM and fastText are variants, not exact
+   published baselines; no validation tuning is performed.
 8. **Panel generalization.** Fixed subsets of 49/65/257 tweets support controlled
-   comparison but not automatic generalization to all TweetEval or other text.
-   Report class support and first-pass quality.
-9. **Test contamination.** Pretrained models may have seen TweetEval or related
-   text. A newer held-out sentiment dataset would be needed for complementary
-   contamination-resistant evaluation.
-10. **Runtime acceptance pending evidence.** Static tests and weight-byte
-    preflight do not prove CUDA fit, QEV numerical behavior, or attention/readout
-    correctness. Unexecuted or failed systems remain planned/skipped, not
-    measured.
-11. **Training boundary.** Only task-specific training can be measured here;
-    large-model pretraining is excluded/unavailable. No total lifecycle-energy
-    claim is supported.
-12. **Host and software specificity.** Results apply to the recorded host,
-    power state, threads, package locks, engine commits, and revisions. Another
-    environment requires a new labelled condition.
-13. **Latency scope.** Adapter request latency and closed-loop group-completion
-    fallback are not interchangeable; group latency and request latency must be
-    distinguished.
-14. **Quality repeat basis.** First-pass quality avoids test-label pooling but
-    does not characterize all repeat variability; report repeat disagreements
-    separately.
+   comparison, not automatic generalization. Report support and first-pass
+   quality.
+9. **Contamination.** Pretrained models may have seen TweetEval or related text;
+   a newer held-out dataset is needed for contamination-resistant evaluation.
+10. **Runtime evidence.** Unexecuted or failed systems are planned/skipped, not
+    measured. Static checks do not prove CUDA fit or QEV numerical correctness.
+11. **Training boundary.** Large-model pretraining is excluded/unavailable; no
+    lifecycle-energy claim is supported.
+12. **Host specificity.** Results apply to the recorded host, power state,
+    threads, locks, commits, and revisions. Another environment is a new
+    condition.
+13. **Latency scope.** Request latency and group-completion fallback are not
+    interchangeable; packed and independent requests need distinct reporting.
+14. **Repeat quality.** First-pass scoring avoids label pooling but does not
+    characterize all repeat variability; report disagreements separately.

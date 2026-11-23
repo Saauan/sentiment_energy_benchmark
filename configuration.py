@@ -22,6 +22,21 @@ MODEL_MANIFEST = ROOT / "setup" / "model_manifest.json"
 MAX_PREDICTIONS_PER_CONDITION = 500_000
 CLASSICAL = {"svm", "nb", "fasttext"}
 GPU = {"vllm", "qev"}
+# Requested widths are client-side concurrency conditions for independent tweets.
+# The historical protocol requested only 1 and 16; the wider stage adds 4, 64 and
+# 256. Keep this an explicit allowlist so a mistyped width cannot silently become
+# a different condition.
+REQUESTED_WIDTHS = (1, 4, 16, 64, 256)
+# Coarse adapter capability. It is not a per-model promise: it only decides which
+# requested widths a phase may run instead of recording as skipped/unsupported.
+# None (classical adapters) means every requested width can be formed from
+# independent tweets in static groups. vLLM has always accepted independent
+# requests at the historical widths 1 and 16; the tuple also lists the wider
+# widths of the gpu_widths stage. QEV serves one independent tweet per request
+# unless the model spec explicitly opts into packed requests.
+_SUPPORTED_BATCHES = {"vllm": REQUESTED_WIDTHS, "qev": (1,)}
+_PACKED_SUPPORTED_BATCHES = REQUESTED_WIDTHS
+_QEV_REQUEST_MODES = {"single", "packed"}
 REVISION = re.compile(r"[0-9a-f]{40}\Z")
 
 _TOP_KEYS = {"schema_version", "dataset", "energy", "models", "phases"}
@@ -41,7 +56,7 @@ _VLLM_PARAMS = {
 _QEV_PARAMS = {
     "onejev_path", "python", "device", "dtype", "head_dtype", "fork_mode", "fork_tolerance",
     "fork_token_budget", "max_branch_tokens", "max_request_tokens", "debias", "debug",
-    "init_timeout_s", "request_timeout_s", "close_timeout_s",
+    "init_timeout_s", "request_timeout_s", "close_timeout_s", "request_mode",
 }
 _SAFETY_KEYS = {
     "weight_shards_bytes", "reserve_mib", "gpu_index", "cuda_visible_devices", "expected_python",
@@ -63,6 +78,33 @@ def _mapping(value, name):
     if not isinstance(value, dict):
         raise ValueError(f"{name} must be an object")
     return value
+
+
+def supported_batches(spec):
+    """Return the independent requested widths an adapter can serve, or ``None``.
+
+    ``None`` mirrors the classical adapters: any requested width can be formed
+    from independent tweets as static groups. The result is a coarse adapter
+    capability, independent of what a phase actually requests, so it stays
+    deterministic for a given spec. QEV advertises only width 1 unless the spec
+    opts in with ``params.request_mode == "packed"``; an absent ``request_mode``
+    (or the explicit historical ``"single"``) keeps single-tweet-per-request.
+
+    The runner is expected to call this for planning and preflight: a requested
+    width absent from the returned tuple must be recorded as
+    skipped/unsupported rather than silently dropped from the plan.
+    """
+    spec = _mapping(spec, "model spec")
+    kind = spec.get("adapter")
+    if kind in CLASSICAL:
+        return None
+    if kind in GPU:
+        if kind == "qev":
+            params = _mapping(spec.get("params") or {}, "model params")
+            if params.get("request_mode") == "packed":
+                return _PACKED_SUPPORTED_BATCHES
+        return _SUPPORTED_BATCHES[kind]
+    raise ValueError(f"unsupported adapter for supported_batches: {kind!r}")
 
 
 def _exact_keys(value, allowed, name, *, required=()):
@@ -205,6 +247,13 @@ def _validate_qev_params(model_id, params):
     for key in ("init_timeout_s", "request_timeout_s", "close_timeout_s"):
         if key in params:
             _number(params[key], f"models.{model_id}.params.{key}", strict=True)
+    if "request_mode" in params:
+        mode = params["request_mode"]
+        if not isinstance(mode, str) or mode not in _QEV_REQUEST_MODES:
+            raise ValueError(
+                f"models.{model_id}.params.request_mode must be one of "
+                f"{sorted(_QEV_REQUEST_MODES)} when present; omit it for the historical default"
+            )
 
 
 def _validate_gpu(model_id, spec, manifest):
@@ -273,8 +322,10 @@ def _validate_phase(name, phase, models):
         raise ValueError(f"phases.{name}.model_ids contains an unknown model")
     widths = phase["batch_sizes"]
     if not isinstance(widths, list) or not widths or len(set(widths)) != len(widths) or any(
-            isinstance(width, bool) or width not in {1, 16} for width in widths):
-        raise ValueError(f"phases.{name}.batch_sizes must contain unique requested widths 1 and/or 16")
+            isinstance(width, bool) or width not in REQUESTED_WIDTHS for width in widths):
+        raise ValueError(
+            f"phases.{name}.batch_sizes must contain unique requested widths from {list(REQUESTED_WIDTHS)}"
+        )
     _integer(phase["seed"], f"phases.{name}.seed")
     sample = _integer(phase["sample_size"], f"phases.{name}.sample_size", minimum=1)
     if sample > 12_284:
@@ -296,8 +347,8 @@ def _validate_phase(name, phase, models):
     for model_id in model_ids:
         per_width = passes[model_id]
         _mapping(per_width, f"phases.{name}.passes.{model_id}")
-        supported = {1} if models[model_id]["adapter"] == "qev" else {1, 16}
-        required = set(widths) & supported
+        capability = supported_batches(models[model_id])
+        required = set(widths) if capability is None else set(widths) & set(capability)
         if set(per_width) != {str(width) for width in required}:
             raise ValueError(f"phases.{name}.passes.{model_id} must exactly cover supported requested widths {sorted(required)}")
         for width, count in per_width.items():
@@ -329,9 +380,10 @@ def _document(config_path):
 def configure(phase, config_path=DEFAULT_CONFIG):
     """Return a detached, validated raw configuration for ``phase``.
 
-    The returned shape is the runner contract. Requested width 16 is retained
-    for QEV even though its ``passes`` mapping only supports width 1; the runner
-    must record that condition as skipped/unsupported rather than removing it.
+    The returned shape is the runner contract. A requested width that the model's
+    adapter cannot serve (see :func:`supported_batches`) stays in ``batch_sizes``
+    and is deliberately absent from that model's ``passes``; the runner must
+    record it as skipped/unsupported rather than removing it from the phase.
     """
     document = _document(Path(config_path))
     if phase not in document["phases"]:

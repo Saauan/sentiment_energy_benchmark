@@ -17,8 +17,8 @@ weights. The benchmark does not use Inspect.
   evidence are in `qev_setup/README.md` and `qev_setup/RUNTIME_SMOKE.md`; do not
   replace that setup with the vLLM environment.
 
-After coordinator installation handoff, recreate or update only the pinned vLLM
-environment with:
+After obtaining exclusive installation ownership, recreate or update only the
+pinned vLLM environment with:
 
 ```bash
 setup/gpu/install.sh --install-vllm
@@ -84,11 +84,14 @@ differs from the model-card image's torch **2.8.0** and must remain visible in
 reports. FLA's optimized `chunk_gated_delta_rule` was enabled; `fork_mode=auto`
 resolves to batched **branches of one tweet**, never independent-tweet width 16.
 
-QEV workers and runtime were reported clean after separate owner smoke checks.
-Those observations are not benchmark results, and peak memory was not
-separately sampled. Normal pilot preflight and loaded-idle/warmup gates remain
-necessary. Elephant and Mammoth use their own exact snapshots/revisions and are
-not silently replaced by Joey's working runtime condition.
+The Joey smoke checks closed their workers and left no compute process. Those
+observations are not benchmark results, and peak memory was not separately
+sampled. Normal pilot preflight and loaded-idle/warmup gates remain necessary.
+Elephant and Mammoth use their own exact snapshots/revisions and are not
+silently replaced by Joey's working runtime condition. See
+[qev_setup/README.md](../../qev_setup/README.md) and
+[qev_setup/RUNTIME_SMOKE.md](../../qev_setup/RUNTIME_SMOKE.md) for the full
+acceptance evidence.
 
 ## Runtime path normalization
 

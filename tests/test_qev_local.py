@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import types
 
 import pytest
 
@@ -217,3 +218,112 @@ def test_fake_qev_subprocess_setup_predict_and_bounded_close(tmp_path, monkeypat
     assert process.poll() is not None
     assert adapter._process is None
     adapter.close()  # idempotent
+
+
+@pytest.fixture
+def packed_worker(monkeypatch):
+    from qev_setup import qev_worker
+
+    class Request:
+        def __init__(self, state, questions):
+            self.state = state
+            self.questions = {k: types.SimpleNamespace(**v) for k, v in questions.items()}
+
+    def render(qid, question, order=None, style=None):
+        return types.SimpleNamespace(qid=qid, n_slots=3, suffix=(question.instructions, order))
+
+    monkeypatch.setitem(sys.modules, "qev", types.ModuleType("qev"))
+    monkeypatch.setitem(sys.modules, "qev.schema", types.SimpleNamespace(SystemOneRequest=Request))
+    monkeypatch.setitem(sys.modules, "qev.prompt", types.SimpleNamespace(render_question=render))
+
+    class Value:
+        def __init__(self, value): self.value = value
+        def model_dump(self, mode): return self.value
+
+    class Engine:
+        max_slots, style, max_branch_tokens, max_request_tokens = 3, None, 32768, 65536
+        calls = 0
+        decisions = 0
+        def _prefix_and_suffix_ids(self, state, rendered):
+            self.calls += 1
+            return [0] * (len(json.dumps(state)) + 1), [[0] * (10 + len(r.suffix[0])) for r in rendered]
+        def decide(self, request, debias, debug):
+            self.decisions += 1
+            import logging
+            logging.getLogger("qev.engine").warning("retrying with chunk 2")
+            answers = {qid: Value({"type": "choice", "choice": "positive", "probabilities": {"positive": 1.0}})
+                       for qid in request.questions}
+            return types.SimpleNamespace(answers=answers, usage=Value({"input_tokens": 1})), {"timing": {"forward_s": 0.1}}
+
+    worker = qev_worker.Worker()
+    worker.engine = Engine()
+    return qev_worker, worker
+
+
+def test_packed_preflight_and_predict_cache(packed_worker):
+    module, worker = packed_worker
+    texts = ["text 1", "text 2", "\"tweet 3\"", "text 4"]
+    request = module._request(texts)
+    assert request.state["tweets"][2] == {"number": 3, "text": texts[2]}
+    assert "tweet number 3" in request.questions["sentiment_3"].instructions
+    assert module._request(["tail"]).state == "tail"
+    assert list(module._request(["tail"]).questions) == ["sentiment"]
+    payload = {"texts": texts, "debias": 2, "debug": False, "request_mode": "packed"}
+    receipt = worker.check_context(payload)
+    assert receipt["fit"] and receipt["width"] == 4 and len(receipt["branch_tokens"]) == 8
+    assert receipt["model_forwarding"] is False and worker.engine.decisions == 0
+    assert worker.engine.calls == 1
+    result = worker.predict_packed(payload)
+    assert worker.engine.calls == 1 and worker.engine.decisions == 1
+    assert list(result["answers"]) == [f"sentiment_{i}" for i in range(1, 5)]
+    assert result["runtime"]["fallback_events"] == ["retrying with chunk 2"]
+    assert result["answers"]["sentiment_3"]["probabilities"]["positive"] == 1.0
+
+
+def test_context_limit_receipt_and_no_forward(packed_worker, tmp_path, monkeypatch):
+    _, worker = packed_worker
+    worker.engine.max_request_tokens = 1
+    payload = {"texts": ["one", "two"], "debias": 1, "request_mode": "packed", "debug": False}
+    receipt = worker.check_context(payload)
+    assert not receipt["fit"] and receipt["checks"][2]["measured"] > 1
+    assert worker.predict_packed(payload) == {"context": receipt}
+    assert worker.engine.decisions == 0
+    adapter = qev_local.create(spec_for(params={"request_mode": "packed"}), tmp_path)
+    monkeypatch.setattr(adapter, "_rpc", lambda *args: receipt)
+    with pytest.raises(Unavailable, match="max_request_tokens.* > 1") as exc:
+        adapter.check_context(payload["texts"])
+    assert exc.value.context_receipt == receipt
+
+
+def test_packed_adapter_mapping_and_no_fake_latencies(packed_worker, tmp_path, monkeypatch):
+    _, worker = packed_worker
+    adapter = qev_local.create(spec_for(params={"request_mode": "packed"}), tmp_path)
+    monkeypatch.setattr(adapter, "_rpc", lambda op, payload, *args: worker.predict_packed(payload))
+    assert adapter.supported_batches == (1, 4, 16, 64, 256)
+    outputs = adapter.predict(["x", "y", "z", "w"])
+    assert [item["raw"]["target_number"] for item in outputs] == [1, 2, 3, 4]
+    assert all(item["label"] == "positive" and "latency_s" not in item for item in outputs)
+    assert "context" in outputs[0]["raw"] and "context" not in outputs[1]["raw"]
+    assert adapter.predict(["tail"])[0]["latency_s"] >= 0
+
+
+def test_card_branch_limit_is_independent_of_runtime_limit(packed_worker):
+    _, worker = packed_worker
+    payload = {"texts": ["x" * 17000], "debias": 1, "request_mode": "packed"}
+    receipt = worker.check_context(payload)
+    assert receipt["max_branch_tokens"] > 16384
+    assert receipt["checks"][0]["fit"] is False
+    assert receipt["checks"][1]["fit"] is True
+    assert not receipt["fit"] and worker.engine.decisions == 0
+
+
+def test_packed_answer_mapping_mismatch_is_rejected(packed_worker, tmp_path, monkeypatch):
+    _, worker = packed_worker
+    adapter = qev_local.create(spec_for(params={"request_mode": "packed"}), tmp_path)
+    def bad_rpc(op, payload, *args):
+        result = worker.predict_packed(payload)
+        del result["answers"]["sentiment_2"]
+        return result
+    monkeypatch.setattr(adapter, "_rpc", bad_rpc)
+    with pytest.raises(RuntimeError, match="answer mapping"):
+        adapter.predict(["one", "two"])

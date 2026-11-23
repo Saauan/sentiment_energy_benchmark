@@ -1,4 +1,5 @@
 from copy import deepcopy
+from hashlib import sha256
 import json
 from pathlib import Path
 
@@ -14,6 +15,12 @@ RAW_KEYS = {
     "repetitions", "passes", "energy", "device_idle_s", "loaded_idle_s",
     "loaded_idle_adapters", "measure_training", "settle_s",
 }
+WIDTH_PROFILE = configuration.ROOT / "profiles" / "laptop-gpu-widths.json"
+WIDE_WIDTHS = (1, 4, 16, 64, 256)
+
+
+def width_document():
+    return load(WIDTH_PROFILE)
 
 
 def document():
@@ -211,3 +218,121 @@ def test_configuration_does_no_runtime_or_network_work(monkeypatch):
     monkeypatch.setattr(subprocess, "run", lambda *a, **k: (_ for _ in ()).throw(AssertionError("subprocess")))
     monkeypatch.setattr(socket, "create_connection", lambda *a, **k: (_ for _ in ()).throw(AssertionError("network")))
     assert configuration.configure("full")["sample_size"] == 257
+
+
+def test_supported_batches_policy_is_coarse_and_deterministic():
+    cfg = configuration.configure("full")
+    for _ in range(2):
+        for model_id, spec in cfg["models"].items():
+            value = configuration.supported_batches(spec)
+            if spec["adapter"] in configuration.CLASSICAL:
+                assert value is None
+            else:
+                assert isinstance(value, tuple) and value
+    assert configuration.supported_batches(cfg["models"]["qwen2b"]) == WIDE_WIDTHS
+    # The published default keeps the historical single-tweet QEV capability.
+    assert configuration.supported_batches(cfg["models"]["joey1"]) == (1,)
+    assert configuration.supported_batches(cfg["models"]["elephant1"]) == (1,)
+    assert configuration.supported_batches(cfg["models"]["mammoth1"]) == (1,)
+    with pytest.raises(ValueError, match="unsupported adapter"):
+        configuration.supported_batches({"adapter": "mystery"})
+    with pytest.raises(ValueError, match="must be an object"):
+        configuration.supported_batches(None)
+
+
+def test_gpu_widths_profile_contract():
+    cfg = configuration.configure("gpu_widths", WIDTH_PROFILE)
+    assert set(cfg) == RAW_KEYS
+    assert cfg["phase"] == "gpu_widths"
+    assert list(cfg["models"]) == ["qwen2b", "joey1"]
+    assert cfg["batch_sizes"] == list(WIDE_WIDTHS)
+    assert (cfg["sample_size"], cfg["warmup_rows"], cfg["seed"], cfg["repetitions"]) == (257, 17, 1729, 3)
+    assert cfg["passes"] == {
+        "qwen2b": {"1": 1, "4": 1, "16": 4, "64": 4, "256": 4},
+        "joey1": {"1": 1, "4": 2, "16": 4, "64": 4, "256": 4},
+    }
+    assert cfg["energy"] == {"country_iso_code": "FRA", "gpu_ids": [0], "sample_secs": 0.2, "min_samples": 5}
+    assert (cfg["device_idle_s"], cfg["loaded_idle_s"], cfg["settle_s"]) == (8, 12, 5)
+    assert cfg["loaded_idle_adapters"] == ["qwen2b", "joey1"]
+    assert cfg["measure_training"] is False
+    # A 0.2 s tracker cadence needs >= 5 scheduled samples; every condition's
+    # conservative duration estimate is at least one second per pass set.
+    assert cfg["energy"]["sample_secs"] == 0.2 and cfg["energy"]["min_samples"] == 5
+    for model_id in cfg["models"]:
+        assert set(cfg["passes"][model_id]) == {str(width) for width in WIDE_WIDTHS}
+        for count in cfg["passes"][model_id].values():
+            assert cfg["sample_size"] * count <= configuration.MAX_PREDICTIONS_PER_CONDITION
+
+
+def test_packed_qev_is_the_explicit_wider_width_opt_in(tmp_path):
+    cfg = configuration.configure("gpu_widths", WIDTH_PROFILE)
+    assert cfg["models"]["joey1"]["params"]["request_mode"] == "packed"
+    assert configuration.supported_batches(cfg["models"]["joey1"]) == WIDE_WIDTHS
+    # Removing the opt-in returns the historical capability, so the wider pass
+    # entries no longer cover it exactly.
+    value = width_document()
+    del value["models"]["joey1"]["params"]["request_mode"]
+    with pytest.raises(ValueError, match="exactly cover supported requested widths"):
+        configuration.configure("gpu_widths", write_document(tmp_path, value))
+
+
+def test_explicit_single_qev_mode_keeps_historical_capability(tmp_path):
+    value = width_document()
+    value["models"]["joey1"]["params"]["request_mode"] = "single"
+    value["phases"]["gpu_widths"]["passes"]["joey1"] = {"1": 1}
+    cfg = configuration.configure("gpu_widths", write_document(tmp_path, value))
+    assert cfg["models"]["joey1"]["params"]["request_mode"] == "single"
+    assert configuration.supported_batches(cfg["models"]["joey1"]) == (1,)
+
+
+@pytest.mark.parametrize("mutation", [
+    lambda d: d["models"]["joey1"]["params"].update(request_mode="auto"),
+    lambda d: d["models"]["joey1"]["params"].update(request_mode=True),
+    lambda d: d["models"]["qwen2b"]["params"].update(request_mode="packed"),
+])
+def test_request_mode_is_a_strict_qev_only_opt_in(tmp_path, mutation):
+    value = width_document()
+    mutation(value)
+    with pytest.raises(ValueError, match="request_mode|unknown keys"):
+        configuration.configure("gpu_widths", write_document(tmp_path, value))
+
+
+def test_unpacked_qev_keeps_wider_widths_visible_without_passes(tmp_path):
+    value = width_document()
+    del value["models"]["joey1"]["params"]["request_mode"]
+    value["phases"]["gpu_widths"]["passes"]["joey1"] = {"1": 1}
+    path = write_document(tmp_path, value)
+    cfg = configuration.configure("gpu_widths", path)
+    assert cfg["batch_sizes"] == list(WIDE_WIDTHS)
+    assert cfg["passes"]["joey1"] == {"1": 1}
+    assert configuration.supported_batches(cfg["models"]["joey1"]) == (1,)
+
+
+@pytest.mark.parametrize("width", [0, 2, 32, 512, True, 4.0, "4"])
+def test_requested_widths_are_a_fixed_allowlist(tmp_path, width):
+    value = width_document()
+    value["phases"]["gpu_widths"]["batch_sizes"].append(width)
+    value["phases"]["gpu_widths"]["passes"]["qwen2b"][str(width)] = 1
+    with pytest.raises(ValueError, match="batch_sizes"):
+        configuration.configure("gpu_widths", write_document(tmp_path, value))
+
+
+def test_published_configs_and_phases_are_unchanged():
+    # The historical files keep their content hashes: the wider capability is a
+    # new profile, not an edit of published configurations.
+    expected = {
+        "experiment.json": "d69b8d5b1d4063dda167ba0dbf02ac5586a0ac03a6fe426ae3b9e358f11abc4c",
+        "profiles/laptop-full-isolated-02.json": "02f11e29e70a6bc8223faa66e0be5f0f8ba8572babec399759f8bdd113ca135a",
+        "profiles/laptop-cpu-isolated-02.json": "84f333434eb237e2e7d18bed66aa95e9c2979190b7d1e0560a5c8a6e86afe346",
+    }
+    for relative, digest in expected.items():
+        path = configuration.ROOT / relative
+        assert sha256(path.read_bytes()).hexdigest() == digest
+    for path, phase in (
+        (configuration.DEFAULT_CONFIG, "gpu_pilot"),
+        (configuration.DEFAULT_CONFIG, "cpu_pilot"),
+        (configuration.DEFAULT_CONFIG, "full"),
+        (configuration.ROOT / "profiles/laptop-full-isolated-02.json", "full"),
+        (configuration.ROOT / "profiles/laptop-cpu-isolated-02.json", "cpu_pilot"),
+    ):
+        assert configuration.configure(phase, path)["batch_sizes"] == [1, 16]

@@ -8,10 +8,13 @@ load them as generative Qwen models, sample tokens, tune prompts on TweetEval, o
 silently quantize/offload. `qev_worker.py` isolates QEV's runtime monkey patch and
 heavy dependencies in a dedicated, offline subprocess with a bounded lifecycle.
 
-Only `supported_batches == (1,)` is advertised. QEV's batched fork handles
-question/option branches for **one state**, not 16 independent tweets. A request
-containing more than one tweet raises `adapters.base.Unavailable`; tweets are
-never concatenated to simulate a batch.
+The default mode supports only one independent tweet per request. QEV's fork
+handles question branches over **one state**, not multiple independent states.
+The `gpu_widths` profile opts Joey into `params.request_mode="packed"`. It puts
+1, 4, 16, 64, or 256 tweets in one request, using a numbered list and one
+three-option question per tweet. Singleton requests keep the baseline format.
+This is shared context, not independent batching: other tweets can affect each
+answer. The model may evaluate the branches in multiple chunks.
 
 ## Exact model-specific mapping
 
@@ -25,9 +28,9 @@ for this inspection.
 | `baselabs/elephant-1` | `2e80345f1e41b2c1eaff8ae2538c0ac657210c44` | 9,409,813,744 | 18,819,722,392 | `98295053fab64c0a71b1c2bbba06c2e31ed33cfb` |
 | `baselabs/mammoth-1` | `858aab610d4d124315ebf72d2f36c5e7341f758f` | 27,356,728,560 | 49,825,162,976 + 4,888,445,168 = 54,713,608,144 | `7c80d74dfe54ed2de25007a979c06743dbc29518` |
 
-These are decimal weight-byte sizes, not measured peak VRAM. Joey fits the
-coordinator's weight-only envelope; actual runtime memory still requires the
-coordinator's GPU pilot. Mammoth remains subject to the separate memory pilot.
+These are decimal weight-byte sizes, not measured peak VRAM. Actual runtime
+memory requires a GPU pilot even when the weight-only envelope fits. Mammoth
+remains subject to a separate memory pilot.
 
 All three cards and all three identical `setup.sh` files specify:
 
@@ -92,12 +95,12 @@ the wrong attention. This adapter requires `spec['local_snapshot']`, sets
 `HF_HUB_OFFLINE=1` and `TRANSFORMERS_OFFLINE=1`, verifies small-file git blobs
 and weight sizes, and never falls back to a Hub download.
 
-## Runtime setup (requires explicit coordinator handoff)
+## Runtime setup
 
-No dependency installation or runtime/GPU launch is part of the staged code
-work. After the coordinator grants the install/runtime handoff, use the pinned
-checkpoint's own installer in the documented image (or an equivalently pinned
-isolated environment):
+Dependency installation, compilation, model loading, smoke inference, and GPU
+benchmarking require exclusive installation/runtime ownership and a quiet host.
+Use the pinned checkpoint's own installer in the documented image (or an
+equivalently pinned isolated environment):
 
 ```bash
 # SNAPSHOT is the fully downloaded, absolute local model snapshot.
@@ -111,9 +114,7 @@ The installer clones OneJev at the exact commit, applies the model snapshot's
 patch, and installs the card's constrained runtime. It also installs the
 Decision Index kit even though this benchmark does not use it; do not replace
 this with an arbitrary newer OneJev or system Transformers installation. Keep
-the base image's CUDA PyTorch build as the installer directs. Dependency install,
-compilation, model load, smoke inference, and GPU benchmarking are separate
-coordinator-owned steps.
+the base image's CUDA PyTorch build as the installer directs.
 
 At adapter setup, the worker additionally checks:
 
@@ -126,7 +127,7 @@ At adapter setup, the worker additionally checks:
    `sdpa`, `eager`, or `flex_attention`, and answer slot IDs are present/unique.
 5. A fixed smoke request (`"The service was excellent."`) returns one of the
    three labels. This load/smoke work occurs in setup, outside measured
-   inference windows, and only after GPU handoff.
+   inference windows, and only with exclusive GPU ownership.
 
 Worker stdout/stderr is retained in the attempt's `qev_worker.log`. Close uses a
 bounded graceful stop followed by SIGTERM/SIGKILL only for the worker's own
@@ -182,15 +183,16 @@ fourth benchmark class.
 
 ## Runtime acceptance status
 
-The coordinator-authorized Joey install and GPU smoke have now passed; see
+The Joey installation and GPU smoke passed; see
 [`RUNTIME_SMOKE.md`](RUNTIME_SMOKE.md) for exact versions, paths, outputs, and
 cleanup evidence. That fallback uses torch 2.10.0+cu128 and Transformers'
 native convolution fallback rather than the card image's PyTorch 2.8 stack and
 optional causal-conv1d extension. This complete-system difference must remain
 explicit in run metadata.
 
-Before measured inference, the runtime execution owner must still perform its
-normal warmup and run preflight. Peak GPU memory was not separately sampled
-during the smoke. Batch 16 stays unsupported unless a future upstream runtime
-explicitly implements and validates independent-state batching; branch batching
-is not such evidence.
+Before measured inference, perform the normal warmup and run preflight. Peak GPU memory was not separately sampled
+during the smoke. The packed profile checks each distinct test and warmup
+request using the pinned tokenizer and renderer before inference. It records
+longest branch and total shared-prefix-plus-suffix token counts in
+`qev_context.json` and refuses over-limit inputs without truncation. This does
+not certify that context-fitting requests fit GPU memory.

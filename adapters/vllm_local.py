@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
+import resource
 import signal
 import socket
 import subprocess
@@ -28,6 +29,15 @@ from .base import Unavailable
 
 LABELS = ("negative", "neutral", "positive")
 ENGINE_VERSION = "0.19.0"
+# The engine scheduler window is fixed at 16 for every condition.  Wider
+# workload widths only widen the *client* burst: additional independent
+# requests queue inside the server, so width 64/256 never means 64/256 resident
+# GPU sequences.
+SCHEDULER_MAX_NUM_SEQS = 16
+SUBMISSION_WIDTHS = (1, 4, 16, 64, 256)
+MAX_SUBMISSION_WIDTH = SUBMISSION_WIDTHS[-1]
+# Unrelated descriptors (logs, meter, dataset) beyond the burst's own sockets.
+_CLIENT_FD_MARGIN = 64
 PROMPT = (
     "Classify the sentiment of this tweet. Reply with exactly one word: "
     "negative, neutral, or positive.\n\nTweet: "
@@ -63,6 +73,11 @@ def _parse_label(content: str) -> str | None:
     return label if label in LABELS else None
 
 
+def _queue_waves(width: int) -> int:
+    """Scheduler admissions a full burst needs with a fixed 16-sequence window."""
+    return -(-width // SCHEDULER_MAX_NUM_SEQS)
+
+
 def _path(value: os.PathLike[str] | str) -> Path:
     path = Path(value).expanduser()
     return path if path.is_absolute() else (_PROJECT_ROOT / path).resolve()
@@ -82,7 +97,7 @@ def create(spec: dict, attempt: Path) -> "VLLMLocalAdapter":
 
 
 class VLLMLocalAdapter:
-    supported_batches = (1, 16)
+    supported_batches = SUBMISSION_WIDTHS
 
     def __init__(self, spec: dict, attempt: Path) -> None:
         if not isinstance(spec, dict):
@@ -99,6 +114,10 @@ class VLLMLocalAdapter:
         self._lock = threading.RLock()
         self._request_policy: dict[str, Any] = {}
         self._served_name = "sentiment-vllm"
+        self._submission_width: int | None = None
+        self._submission_width_source: str | None = None
+        self._burst_width = MAX_SUBMISSION_WIDTH
+        self._client_budget: dict[str, Any] = {}
         self._pid: int | None = None
         self._atexit_registered = False
 
@@ -150,6 +169,46 @@ class VLLMLocalAdapter:
                 f"(exit {result.returncode}){': ' + detail if detail else ''}"
             )
 
+    def _resolve_submission_width(self) -> int | None:
+        """Return an explicitly declared client burst width, if any.
+
+        ``None`` means the burst follows the caller's group: every text passed
+        to one ``predict`` call is submitted together, capped at the largest
+        supported width.  A group that is at most the declared width is always
+        one burst; a wider one is split and labelled ``declared_split`` so no
+        split is silent.
+
+        The runner injects the per-block width at the top level of the runtime
+        spec, which therefore wins over a static ``params`` value; both are
+        validated, and the source is recorded.
+        """
+        declared: int | None = None
+        source_name: str | None = None
+        for name, source in (("spec", self.spec), ("params", self.params)):
+            if "submission_width" not in source:
+                continue
+            value = source["submission_width"]
+            if isinstance(value, bool) or not isinstance(value, int) or value not in SUBMISSION_WIDTHS:
+                raise Unavailable(
+                    f"submission_width must be one of {list(SUBMISSION_WIDTHS)}, not {value!r}"
+                )
+            if declared is None:
+                declared, source_name = value, name
+        self._submission_width_source = source_name
+        return declared
+
+    def _check_client_budget(self, width: int) -> dict[str, Any]:
+        """Refuse a burst the process cannot hold open; one socket per request."""
+        required = width + _CLIENT_FD_MARGIN
+        soft, _ = resource.getrlimit(resource.RLIMIT_NOFILE)
+        unlimited = soft == resource.RLIM_INFINITY
+        if not unlimited and soft < required:
+            raise Unavailable(
+                f"A {width}-request closed-loop burst requires at least {required} open "
+                f"files, but RLIMIT_NOFILE soft limit is {soft}"
+            )
+        return {"required_fds": required, "rlimit_nofile_soft": None if unlimited else int(soft)}
+
     def _validate_configuration(self) -> None:
         dtype = str(self.params.get("dtype", "bfloat16")).lower()
         if dtype not in {"bfloat16", "bf16"}:
@@ -157,8 +216,12 @@ class VLLMLocalAdapter:
         quantization = self.params.get("quantization")
         if quantization not in (None, "", "none", "None"):
             raise Unavailable(f"Quantization is forbidden for this condition: {quantization!r}")
-        if int(self.params.get("max_num_seqs", 16)) != 16:
-            raise Unavailable("The closed-loop width-16 condition requires max_num_seqs=16")
+        if int(self.params.get("max_num_seqs", SCHEDULER_MAX_NUM_SEQS)) != SCHEDULER_MAX_NUM_SEQS:
+            raise Unavailable(
+                "Every closed-loop submission width requires the fixed scheduler window "
+                f"max_num_seqs={SCHEDULER_MAX_NUM_SEQS}; widths 64/256 widen the client "
+                "burst and queue inside the server, they do not raise concurrent sequences"
+            )
         if int(self.params.get("max_tokens", 8)) < 1:
             raise Unavailable("max_tokens must be positive")
         if int(self.params.get("max_model_len", 1024)) < 1:
@@ -179,6 +242,10 @@ class VLLMLocalAdapter:
             raise Unavailable(f"local_snapshot is not a directory: {_path(snapshot)}")
         if not snapshot and not self.spec.get("repo"):
             raise Unavailable("vLLM spec requires repo or local_snapshot")
+        self._submission_width = self._resolve_submission_width()
+        self._burst_width = self._submission_width or MAX_SUBMISSION_WIDTH
+        # Fail before the measurement window opens, not in the middle of a burst.
+        self._client_budget = self._check_client_budget(self._burst_width)
 
     def _environment(self) -> dict[str, str]:
         cache = _path(self.spec.get("cache_dir", self.attempt / "cache"))
@@ -226,7 +293,7 @@ class VLLMLocalAdapter:
             "--gpu-memory-utilization",
             str(float(self.params.get("gpu_memory_utilization", 0.85))),
             "--max-num-seqs",
-            "16",
+            str(SCHEDULER_MAX_NUM_SEQS),
             "--seed",
             str(int(self.params.get("seed", 0))),
             "--generation-config",
@@ -343,10 +410,16 @@ class VLLMLocalAdapter:
                 self._base_url = f"http://127.0.0.1:{port}"
                 self._request_policy = {
                     "endpoint": "/v1/chat/completions",
-                    "independent_request_threads": 16,
+                    "independent_request_threads": self._burst_width,
                     "closed_loop": True,
                     "retries": 0,
                     "timeout_s": float(self.safety.get("request_timeout_s", 120)),
+                    "scheduler_max_num_seqs": SCHEDULER_MAX_NUM_SEQS,
+                    "supported_submission_widths": list(SUBMISSION_WIDTHS),
+                    "submission_width": self._submission_width,
+                    "submission_width_source": self._submission_width_source,
+                    "max_concurrent_client_requests": self._burst_width,
+                    "max_queue_waves": _queue_waves(self._burst_width),
                     "max_tokens": int(self.params.get("max_tokens", 8)),
                     "temperature": 0.0,
                     "top_p": 1.0,
@@ -400,7 +473,16 @@ class VLLMLocalAdapter:
                     "dtype": "bfloat16",
                     "quantization": None,
                     "max_model_len": int(self.params.get("max_model_len", 1024)),
-                    "max_num_seqs": 16,
+                    "max_num_seqs": SCHEDULER_MAX_NUM_SEQS,
+                    "client_burst": {
+                        "supported_widths": list(SUBMISSION_WIDTHS),
+                        "declared_width": self._submission_width,
+                        "declared_width_source": self._submission_width_source,
+                        "max_concurrent_requests": self._burst_width,
+                        "scheduler_window": SCHEDULER_MAX_NUM_SEQS,
+                        "max_queue_waves": _queue_waves(self._burst_width),
+                        **self._client_budget,
+                    },
                     "gpu_memory_utilization": float(
                         self.params.get("gpu_memory_utilization", 0.85)
                     ),
@@ -478,24 +560,62 @@ class VLLMLocalAdapter:
         }
 
     def predict(self, texts: list[str]) -> list[dict[str, Any]]:
-        """Submit independent requests in closed-loop groups of at most 16."""
+        """Submit independent requests in closed-loop client bursts.
+
+        Every text given to one call is submitted together, so the caller's
+        group defines the burst width; larger inputs are split only at a
+        recorded boundary.  A group fully completes before the next one starts,
+        and the server's fixed 16-sequence window turns widths beyond 16 into
+        queueing rather than wider GPU batches.
+        """
         with self._lock:
             if not self._ready or self._closed or self._process is None:
                 raise RuntimeError("vLLM adapter is not set up")
             if not texts:
                 return []
-            group_sizes = [len(texts[start : start + 16]) for start in range(0, len(texts), 16)]
-            self._log("predict", tweets=len(texts), group_sizes=group_sizes)
+            if self._submission_width is None:
+                width = min(len(texts), MAX_SUBMISSION_WIDTH)
+                source = "caller_group" if width == len(texts) else "capped"
+            else:
+                width = self._submission_width
+                # A group at or below the declared width is exactly one burst;
+                # a wider one is split, which is labelled rather than silently
+                # reshaped.
+                source = "declared" if len(texts) <= width else "declared_split"
+            self._check_client_budget(width)
+            group_sizes = [len(texts[start : start + width]) for start in range(0, len(texts), width)]
+            self._log(
+                "predict",
+                tweets=len(texts),
+                submission_width=width,
+                submission_width_source=source,
+                scheduler_max_num_seqs=SCHEDULER_MAX_NUM_SEQS,
+                queue_waves=[_queue_waves(size) for size in group_sizes],
+                group_sizes=group_sizes,
+            )
             results: list[dict[str, Any]] = []
-            for start in range(0, len(texts), 16):
-                group = texts[start : start + 16]
-                # A fresh executor per closed-loop group makes the barrier
-                # explicit. executor.map preserves input order.
-                with ThreadPoolExecutor(
-                    max_workers=len(group), thread_name_prefix="vllm-request"
-                ) as executor:
-                    results.extend(executor.map(self._predict_one, group))
+            for start in range(0, len(texts), width):
+                results.extend(self._predict_group(texts[start : start + width]))
             return results
+
+    def _predict_group(self, group: list[str]) -> list[dict[str, Any]]:
+        """Run one closed-loop burst; no later group starts before it returns."""
+        # A fresh executor per group makes the barrier explicit.  Python's
+        # ``map`` submits every request immediately, so the whole burst is in
+        # flight before the first response is consumed.
+        try:
+            with ThreadPoolExecutor(
+                max_workers=len(group), thread_name_prefix="vllm-request"
+            ) as executor:
+                return list(executor.map(self._predict_one, group))
+        except RuntimeError as exc:
+            if "can't start new thread" in str(exc):
+                raise RuntimeError(
+                    f"Could not start {len(group)} client request threads for a closed-loop "
+                    "burst; some requests may already be in flight, no retry is attempted "
+                    "and this attempt must not be reused"
+                ) from exc
+            raise
 
     def close(self) -> None:
         """Idempotently terminate only the owned server process group."""

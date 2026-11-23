@@ -9,9 +9,11 @@ parent. Unexpected diagnostics are written to the worker log, not the protocol.
 from __future__ import annotations
 
 import argparse
+from collections import OrderedDict
 from dataclasses import asdict
 import importlib
 import json
+import logging
 import os
 from pathlib import Path
 import subprocess
@@ -31,6 +33,67 @@ QUESTION = {
 }
 LABELS = frozenset(QUESTION["criteria"])
 SMOKE_TEXT = "The service was excellent."
+CARD_MAX_BRANCH_TOKENS = 16_384
+
+
+def _request(texts: list[str]):
+    from qev.schema import SystemOneRequest
+
+    if not texts or len(texts) > 256 or not all(isinstance(text, str) for text in texts):
+        raise ValueError("expected 1 to 256 tweet strings")
+    if len(texts) == 1:
+        return SystemOneRequest(state=texts[0], questions={QUESTION_ID: QUESTION})
+    state = {"tweets": [{"number": i, "text": text} for i, text in enumerate(texts, 1)]}
+    questions = {
+        f"sentiment_{i}": {**QUESTION, "instructions": f"Which sentiment best describes tweet number {i} in the tweets list?"}
+        for i in range(1, len(texts) + 1)
+    }
+    return SystemOneRequest(state=state, questions=questions)
+
+
+def _context(engine: Any, request: Any, debias: int, request_mode: str) -> dict[str, Any]:
+    # Mirrors the pinned DecisionEngine.decide rendering and shift ordering.
+    # The fixed three-option questions never use its many-option chunking path.
+    from qev.prompt import render_question
+
+    rendered = []
+    for qid, question in request.questions.items():
+        if len(question.criteria) > engine.max_slots:
+            raise RuntimeError("QEV fixed sentiment questions exceed runtime slots")
+        base = render_question(qid, question, style=engine.style)
+        k = base.n_slots
+        for shift in range(min(max(debias, 1), k) if k > 1 else 1):
+            order = [(i + shift) % k for i in range(k)]
+            rendered.append(render_question(qid, question, order=order if shift else None, style=engine.style))
+    prefix, suffixes = engine._prefix_and_suffix_ids(request.state, rendered)
+    prefix_tokens = len(prefix)
+    branch_tokens = [prefix_tokens + len(suffix) for suffix in suffixes]
+    longest = max(branch_tokens)
+    total = prefix_tokens + sum(len(suffix) for suffix in suffixes)
+    checks = [
+        {"name": "card_max_branch_tokens", "measured": longest, "limit": CARD_MAX_BRANCH_TOKENS},
+        {"name": "runtime_max_branch_tokens", "measured": longest, "limit": engine.max_branch_tokens},
+        {"name": "max_request_tokens", "measured": total, "limit": engine.max_request_tokens},
+    ]
+    for check in checks:
+        check["fit"] = check["measured"] <= check["limit"]
+    return {"fit": all(c["fit"] for c in checks), "request_mode": request_mode,
+            "width": len(request.questions), "question_ids": list(request.questions),
+            "prefix_tokens": prefix_tokens, "branch_tokens": branch_tokens,
+            "max_branch_tokens": longest, "total_tokens": total,
+            "card_max_branch_tokens": CARD_MAX_BRANCH_TOKENS,
+            "runtime_max_branch_tokens": engine.max_branch_tokens,
+            "max_request_tokens": engine.max_request_tokens,
+            "checks": checks, "model_forwarding": False}
+
+
+class _FallbackCapture(logging.Handler):
+    def __init__(self):
+        super().__init__(level=logging.WARNING)
+        self.events = []
+
+    def emit(self, record):
+        self.events.append(record.getMessage())
 
 
 def _run_git(onejev: Path, *args: str) -> str:
@@ -103,6 +166,18 @@ def _decide(engine: Any, text: str, debias: int, debug: bool) -> dict[str, Any]:
 class Worker:
     def __init__(self) -> None:
         self.engine = None
+        self._contexts = OrderedDict()
+
+    def _cached_context(self, texts, debias, request, request_mode):
+        key = (tuple(texts), debias, request_mode)
+        if key in self._contexts:
+            self._contexts.move_to_end(key)
+            return self._contexts[key]
+        receipt = _context(self.engine, request, debias, request_mode)
+        self._contexts[key] = receipt
+        if len(self._contexts) > 4096:
+            self._contexts.popitem(last=False)
+        return receipt
 
     def init(self, payload: dict[str, Any]) -> dict[str, Any]:
         if self.engine is not None:
@@ -141,7 +216,42 @@ class Worker:
             raise RuntimeError("QEV engine is not initialized")
         return _decide(self.engine, payload["text"], payload["debias"], payload["debug"])
 
+    def check_context(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if self.engine is None:
+            raise RuntimeError("QEV engine is not initialized")
+        texts = payload["texts"]
+        if payload.get("request_mode") == "single" and len(texts) != 1:
+            raise ValueError("single mode requires one tweet")
+        mode = payload.get("request_mode", "packed")
+        return self._cached_context(texts, payload["debias"], _request(texts), mode)
+
+    def predict_packed(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if self.engine is None:
+            raise RuntimeError("QEV engine is not initialized")
+        request = _request(payload["texts"])
+        context = self._cached_context(payload["texts"], payload["debias"], request, "packed")
+        if not context["fit"]:
+            return {"context": context}
+        capture = _FallbackCapture()
+        logger = logging.getLogger("qev.engine")
+        logger.addHandler(capture)
+        try:
+            response, runtime = self.engine.decide(request, debias=payload["debias"], debug=payload["debug"])
+        finally:
+            logger.removeHandler(capture)
+        expected = list(request.questions)
+        if set(response.answers) != set(expected):
+            raise RuntimeError("QEV returned missing or unexpected question IDs")
+        answers = {qid: response.answers[qid].model_dump(mode="json") for qid in expected}
+        runtime["fallback_events"] = capture.events
+        result = {"answers": answers, "usage": response.usage.model_dump(mode="json"), "runtime": runtime,
+                  "context": context, "request": {"question_ids": expected, "width": len(expected),
+                  "semantics": "singleton_historical" if len(expected) == 1 else "shared_state_targeted_questions"}}
+        json.dumps(result, allow_nan=False)
+        return result
+
     def close(self) -> None:
+        self._contexts.clear()
         self.engine = None
 
 
@@ -163,6 +273,10 @@ def main() -> int:
                     result = worker.init(payload)
                 elif operation == "predict":
                     result = worker.predict(payload)
+                elif operation == "check_context":
+                    result = worker.check_context(payload)
+                elif operation == "predict_packed":
+                    result = worker.predict_packed(payload)
                 elif operation == "close":
                     worker.close()
                     responses.write(json.dumps({"ok": True, "result": None}) + "\n")

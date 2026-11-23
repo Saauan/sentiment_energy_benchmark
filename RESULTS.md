@@ -1,62 +1,143 @@
-# TweetEval sentiment energy benchmark — laptop run
+# TweetEval sentiment energy benchmark — results
 
-**23 November 2026.** All conditions that fit the laptop and were supported by their inference engine completed. **27 inference trials measured, 27 skipped, none failed or pending.** The full run contains 81 validated native BoAmps JSON/CodeCarbon CSV pairs: 27 inference, 27 unloaded device idle, 9 model-loaded idle, and 18 classical training trials. Another 81 plan entries were skipped, including the calibration entries associated with the 27 skipped inference trials. Nothing was submitted upstream.
+**23 November 2026.** Two completed measurement sets on one laptop: a
+ten-condition GPU width sweep (`gpu_widths`, latest) and the five-system
+baseline matrix (`full`). Both use the same fixed 257-tweet panel and first-pass
+quality. They are different workloads and are reported separately, never pooled.
 
-- [Full run artifacts](artifacts/full_isolated_02/) · [Run-level CSVs](results/full_isolated_02/) · [Medians and ranges CSV](results/full_isolated_02/inference_medians.csv) · [Rendered marimo notebook](results/full_isolated_02/notebook.html) · [Verification receipt](results/full_isolated_02/verification.json)
-- [Measured full configuration](profiles/laptop-full-isolated-02.json) · [Design and limitations](DESIGN.md) · [Usage and workstation rerun](README.md#rerun-on-a-different-host)
+- **Latest:** [width sweep summary](results/gpu_widths_01/SUMMARY.md) ·
+  [inference medians](results/gpu_widths_01/inference_medians.csv) ·
+  [verification receipt](results/gpu_widths_01/verification.json)
+- **Baseline:** [preserved detailed report](results/full_isolated_02/DETAILS.md) ·
+  [inference medians](results/full_isolated_02/inference_medians.csv) ·
+  [notebook](results/full_isolated_02/notebook.html) ·
+  [verification receipt](results/full_isolated_02/verification.json)
+- **Protocol:** [DESIGN.md](DESIGN.md) · **Setup:** [README.md](README.md)
 
-## 1. Coverage and conditions
+## 1. GPU width sweep (`gpu_widths_01`)
 
-The host was a laptop with an Intel Core Ultra 9 275HX and one NVIDIA RTX PRO 3000 Blackwell Laptop GPU, 12,227 MiB total VRAM (driver 595.99.02). The fixed [TweetEval sentiment](https://github.com/cardiffnlp/tweeteval/tree/4fbd22cd78421f05b1ecdb4fc5725bc7a7bd8f66/datasets/sentiment) test panel had 257 tweets: 76 negative, 129 neutral, and 52 positive. All five runnable systems saw these same test IDs in the same order. Three independently measured repetitions were planned per model and width in a seed-determined interleaving. Training used the published training split; hyperparameters and prompts were fixed rather than tuned on validation or test. Validation examples were used for warmup. Scores use the exact persisted **first measured pass per trial**, not all repeated submissions. Energy and performance use the actual full measured workload. Across 27 completed inference trials there were 4,862,697 submissions, not 4,862,697 independently sampled tweets.
+**Status:** all 90 planned entries completed — 30 inference, 30 unloaded idle,
+and 30 model-loaded idle — with no skips, failures, or incomplete attempts. No
+pilot phase was run. Every inference trial passed its sampling gate
+(14–258 scheduled ticks; worst observed tick gap 0.220 s).
 
-| System | Completed inference widths | Submissions per trial, widths 1 / 16 | Note |
-|---|---:|---:|---|
-| Qwen3.5-2B / vLLM 0.19.0 | 1, 16 | 514 / 1,028 | BF16, no quantization/thinking/prefix caching; closed-loop bursts of independent requests |
-| Joey-1 / patched OneJev QEV | 1 | 257 / — | Verified noncausal full attention and `slot_lm`; BF16 backbone and FP32 head |
-| TF–IDF + LinearSVC | 1, 16 | 51,400 / 308,400 | Static groups, train-only baseline variant |
-| TF–IDF + multinomial NB | 1, 16 | 51,400 / 308,400 | Static groups, shared feature recipe with SVM |
-| fastText | 1, 16 | 449,750 / 449,750 | Static groups; trained from scratch, not the published pretrained-embedding baseline |
+**Conditions:** Qwen3.5-2B/vLLM and Joey-1/patched OneJev QEV, widths
+1/4/16/64/256, three repetitions each, same 257 test IDs (76 negative, 129
+neutral, 52 positive). Qwen submits independent requests with vLLM's scheduler
+capped at 16. Joey receives one packed envelope per width group: a shared,
+numbered tweet list, so **packed decisions are one shared state, not an
+independent batch**. Gross J/tweet divides by all submitted tweet decisions;
+quality uses the first measured pass only.
 
-Joey-1 width 16 was skipped in all three repetitions: QEV can batch branches *inside* one decision, not 16 verified independent tweets. These larger models were evaluated by preflight and skipped without downloading or loading weights. Each accounts for six inference skips (two widths × three repetitions); the weight sizes alone exceed total laptop VRAM, before runtime reserve or cache:
+| Model | Width | Macro recall | Macro-F1 | Accuracy | Gross J/tweet | Tweets/s | Group p95, ms |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Joey-1 | 1 | 0.646 | 0.647 | 0.654 | 5.637 | 20.2 | 54 |
+| Joey-1 | 4 | 0.589 | 0.599 | 0.634 | 1.890 | 60.5 | 72 |
+| Joey-1 | 16 | 0.582 | 0.586 | 0.638 | **1.496** | **76.7** | 217 |
+| Joey-1 | 64 | 0.593 | 0.598 | 0.634 | 1.958 | 51.9 | 1,324 |
+| Joey-1 | 256 | 0.578 | 0.574 | 0.630 | 3.292 | 22.9 | 11,315 |
+| Qwen3.5-2B | 1 | 0.589 | 0.423 | 0.455 | 4.574 | 24.4 | 46 |
+| Qwen3.5-2B | 4 | 0.595 | 0.428 | 0.459 | 1.411 | 81.3 | 65 |
+| Qwen3.5-2B | 16 | 0.595 | 0.429 | 0.459 | 0.766 | 147.0 | 120 |
+| Qwen3.5-2B | 64 | 0.595 | 0.429 | 0.459 | 0.731 | 156.5 | 434 |
+| Qwen3.5-2B | 256 | 0.595 | 0.429 | 0.459 | **0.695** | **161.1** | 1,589 |
 
-| Checkpoint | Pinned safetensors total |
-|---|---:|
-| Qwen3.5-9B | 19.31 GB |
-| Elephant-1 | 18.82 GB |
-| Qwen3.5-27B | 55.56 GB |
-| Mammoth-1 | 54.71 GB |
+Medians of three repetitions; ranges and all counters are in
+`inference_medians.csv`. Group p95 is the closed-loop completion of one
+submission envelope: all requests in a width for Qwen, or Joey's packed request.
+For Qwen, per-request (HTTP) p95 was 45/62/116/409/1,477 ms for widths 1–256.
+Joey's envelope is a single adapter request, so group p95 is the comparable
+measure; the export reports an adapter-request p95 only at width 1 (53.9 ms).
 
-No quantized, offloaded, or substitute instances were run. Joey used the exact pinned source and model patch, but a local CUDA 12.8 runtime with PyTorch **2.10.0+cu128**, not the card's 2.8 image. The missing `causal-conv1d` extension fell back to native Torch convolution; optimized FLA gated-delta execution was enabled. See [the live QEV smoke](qev_setup/RUNTIME_SMOKE.md) and [the actual package freeze](qev_setup/laptop-runtime.freeze.txt).
+### Findings
 
-## 2. Inference results
+- **Joey:** width 16 is the most energy-efficient packed condition
+  (1.496 J/tweet, 76.7 tweets/s). Width 1 has the best quality (macro-F1 0.647,
+  accuracy 0.654); packing reduces macro-F1 by 0.048–0.073 and accuracy by
+  0.016–0.024. Packing changes each answer's context, so this is a workload and
+  quality trade-off, not a free speedup.
+- **Qwen:** gross energy per tweet falls 6.6× from width 1 to 256
+  (4.574 → 0.695). Most of the gain already occurs by width 16 (0.766); going
+  from 16 to 256 lowers J/tweet only ~9% while group p95 grows ~13×
+  (120 → 1,589 ms) and HTTP p95 grows ~13× (116 → 1,477 ms). Quality is flat
+  across widths (macro-F1 0.423–0.429, accuracy 0.455–0.459).
+- Loaded-idle-adjusted J/tweet, a separate basis, is 3.462/1.143/0.912/1.102/1.356
+  for Joey widths 1–256 and 2.788/0.853/0.461/0.442/0.416 for Qwen.
+- **Context:** every Joey envelope fit. At width 256 the longest branch used
+  11,701 of 16,384 tokens, and the largest request used 32,248 of 65,536 tokens.
+  Token checks ran before inference; no input was truncated.
+- **Engine retry behaviour (audited):** 45 of 48 full width-64 Joey envelopes
+  (15 of 16 per repetition) hit an internal OOM retry and halved the branch
+  chunk from 64 to 32; there was no sequential fallback. Width 256 used planned
+  token-budget chunking (up to 17 branches per chunk, 16 chunks per full envelope) with no OOM
+  retries. Both are internal to one request envelope and change neither the
+  envelope nor tweet-decision count.
+- Repeat disagreements with each trial's own first pass were 0 for every Joey
+  width; for Qwen they were 0 (widths 1 and 4), 6 (16), 3 (64), and 8 (256)
+  across later passes. Deterministic request parameters do not guarantee
+  identical labels under concurrency.
 
-Values are medians across three trials. Gross energy uses CodeCarbon CPU + GPU + RAM, divided by all submitted tweets. Throughput is completed tweets per measured work-window second. p95 is per request for vLLM/QEV, and group-completion latency for static CPU groups; those are different latency units of work despite both being milliseconds. All trials had **100% valid-output coverage**. The [CSV](results/full_isolated_02/inference_medians.csv) has min/max, accuracy, p50, and idle-adjusted estimates.
+## 2. Baseline laptop matrix (`full_isolated_02`)
 
-| System | Width | Macro recall | Macro-F1 | Gross J/tweet [min–max] | Tweets/s | p95, ms |
-|---|---:|---:|---:|---:|---:|---:|
-| Qwen3.5-2B | 1 | 0.589 | 0.423 | 4.731 [4.589–4.864] | 24.35 | 43.62 |
-| Qwen3.5-2B | 16 | 0.589 | 0.424 | 0.766 [0.759–0.772] | 147.70 | 113.90 |
-| Joey-1 | 1 | 0.646 | 0.647 | 5.582 [5.582–5.708] | 20.23 | 53.36 |
-| TF–IDF + LinearSVC | 1 | 0.591 | 0.587 | 0.00885 [0.00843–0.00887] | 4,055 | 0.254 |
-| TF–IDF + LinearSVC | 16 | 0.591 | 0.587 | 0.00104 [0.00101–0.00105] | 35,150 | 0.424 |
-| TF–IDF + multinomial NB | 1 | 0.493 | 0.432 | 0.02018 [0.01996–0.02036] | 1,772 | 0.588 |
-| TF–IDF + multinomial NB | 16 | 0.493 | 0.432 | 0.00173 [0.00171–0.00178] | 20,185 | 0.750 |
-| fastText | 1 | 0.540 | 0.546 | 0.000225 [0.000212–0.000235] | 157,376 | 0.00580 |
-| fastText | 16 | 0.540 | 0.546 | 0.000184 [0.000175–0.000186] | 195,339 | 0.0607 |
+Five systems were measured on the same panel and the same first-pass basis:
+Qwen3.5-2B/vLLM, Joey-1/QEV, TF–IDF + linear SVM, TF–IDF + multinomial NB, and
+fastText. 27 inference trials and 81 validated native BoAmps/CodeCarbon pairs
+completed with no failures; four larger checkpoints were skipped on fit
+without downloading or altering them.
 
-Within Qwen3.5-2B, width 16 had about **6.2× lower gross energy per tweet** and **6.1× higher throughput**, but about **2.6× higher p95 per-request latency**. The two widths had the same median macro recall to three decimals. Width 16 had 2–5 disagreements with its own first-pass predictions across the three later passes of each run; deterministic request parameters do not guarantee identical results under concurrency. Across the runnable width-1 systems, Joey had the highest observed macro recall on this panel, not an established advantage across datasets or hardware. The classical pipelines used less gross energy per submission on this host and workload; the model, engine, formatting, work unit, and hardware-use differences do not identify an architecture-only effect.
+- Within Qwen3.5-2B, width 16 had ~6.2× lower gross J/tweet, ~6.1× higher
+  throughput, and ~2.6× higher per-request p95 than width 1, with unchanged
+  median macro recall.
+- Joey width 1 had the highest observed macro recall (0.646) among width-1
+  systems on this panel.
+- Classical pipelines used far less gross energy per submission on this host
+  (0.00018–0.020 J/tweet), but engine, formatting, work unit, and hardware use
+  also differ; this is not an architecture-only effect.
 
-The 27 unloaded idle windows gave a median gross component estimate of **35.97 W** [35.01–39.33 W]; no model requests, fitting, or scoring happened in the idle callback. With a compatible model-loaded baseline, median adjusted J/tweet was 2.900 (Qwen width 1), 0.463 (Qwen width 16), and 3.448 (Joey width 1). There was no loaded-idle adjustment for CPU inference. Classical device-idle-adjusted values were near zero and sometimes negative: the difference is sensitive to the baseline and the CPU estimation floor and does **not** resolve the workload's incremental energy. Signed values remain in the artifacts. GPU 0 remained powered and metered for CPU trials.
+Full conditions, tables, pilot corrections, and limits are preserved verbatim
+in [results/full_isolated_02/DETAILS.md](results/full_isolated_02/DETAILS.md).
+The baseline is **not pooled** with the width sweep. Qwen width 16 was repeated
+in the new sweep; packed Joey widths above 1 were not measured in the baseline.
 
-## 3. Pilot corrections, restart, and verification
+## 3. Historical engineering evidence
 
-1. **[GPU engineering pilot](artifacts/gpu_pilot/):** an initial idle attempt failed validation because CodeCarbon initializes hardware discovery lazily; initialization was moved before the measurement window and the retry passed. Qwen and Joey then completed native exports and first-pass scoring. A real SIGTERM during Qwen width-1 inference left an incomplete attempt; resume wrote a fresh attempt, and invoking the runner again left completed bytes unchanged. The width-16 GPU pilot was too short for scheduled samples and is not used for quantitative inference comparisons.
-2. **Classical pilots:** the [1 s in-process pilot](artifacts/cpu_pilot/) and [0.1 s in-process rescue](artifacts/cpu_pilot_resized/) produced schema-valid native reports but exposed missed scheduler ticks and under-integration. In the worst rescue trial (SVM width 1), only 2 scheduled samples arrived in 14.2 s and the fixed RAM estimate integrated about 3.5% of the expected energy. Scheduled count alone was insufficient: both rescue fastText windows exceeded five ticks but still showed poor RAM integration. The exact cause of the stalls was not isolated. These profiles are engineering evidence, not primary energy data.
-3. **[Corrected CPU pilot](artifacts/cpu_pilot_isolated_02/) and full run:** the CodeCarbon scheduler moved to its own interpreter; the final cadence was 0.2 s for all models. The corrected CPU pilot passed both gates in all six conditions (10–82 scheduled samples, 0.949–0.972 fixed-RAM coverage). The full run passed them in all 27 inference trials (11–145 samples, coverage 0.955–0.976, max observed inter-tick gap 0.2113 s). Coverage here is `3,600,000 × RAM kWh / (reported RAM W × native seconds)`, only a consistency check for the constant 20 W RAM estimate. The full run also stopped at a time budget during one idle calibration and resumed under the unchanged plan; the incomplete attempt remains recorded.
-4. **Independent checks:** 104 offline tests and 9 subtests passed. The final `verify` command re-audited all 81 native pairs against five hash-checked Draft-04 schemas pinned at BoAmps `af1680c56ce2cefd5777fcac1c57591b685d6be5`, agreeing on unique native IDs, duration, component and total energy, task metadata, and counts. It also rehashed and rescored predictions, and recomputed adjustments. Native `powerConsumption` is retained in kWh; J/tweet is derived, not written back to the native report. No active meter, benchmark, serving or GPU compute process remained at handoff.
+`results/gpu_pilot/` and `results/cpu_pilot_isolated_02/` are preserved
+engineering exports from meter and restart checks. They are not required steps
+and are not quantitative results. The current readiness rule is in
+[DESIGN.md](DESIGN.md#9-acceptance-sequence).
 
-## 4. Limits and the planned workstation run
+## 4. Limits
 
-This was a single-host study, not controlled wall-power measurement. CodeCarbon used a machine CPU-load/TDP estimate (96 W nominal TDP, observed CPU estimate near the 9.6 W model floor on many CPU runs), a RAM model, and NVIDIA NVML on this laptop. Native schema/consistency checks and stable ticks do not establish absolute energy accuracy or eliminate CodeCarbon overhead. The system remained a laptop with desktop activity possible; clocks and thermals were observed, not locked. Model loading and warmup are excluded from steady-state energy. The separate training trials should not be pooled with inference, and prior pretraining energy is outside the measured boundary. The 257-item panel, three runs per condition, and possible pretrained-model exposure to TweetEval limit generalization.
+- Single laptop host; CodeCarbon CPU/GPU/RAM estimates with PUE 1, not
+  wall-meter or whole-system energy. Clocks and thermals were observed, not
+  locked, and desktop activity was possible.
+- Quality is first-pass only; later passes diagnose disagreement and are not
+  independent quality samples. Energy divides by all submitted tweet decisions,
+  so repeated passes count as workload, not as new tweets.
+- A run is the energy experimental unit; tweets and passes are not independent
+  replicates. Width-1 comparisons on one 257-item panel limit generalization,
+  and pretrained models may have seen TweetEval text.
+- Qwen bursts are independent requests under a scheduler cap of 16; Joey
+  envelopes are shared-context packed requests. Client width never proves an
+  internal hardware batch. No result isolates an architecture-only effect.
+- One Joey width-64 repetition took ~28.0 s versus ~19.7 s in the other two.
+  The retry pattern and first-pass predictions were identical across repetitions.
 
-On the planned better machine, use a [fresh hardware profile and artifact root](README.md#rerun-on-a-different-host). Re-run the pilots and fit gates; reuse the pinned panel and comparable engine settings when possible. Pay particular attention to the metered GPU IDs, CPU/RAM backends, idle conditions, and sufficient inference-window lengths on faster hardware. Tests of the larger model pairs remain open until that run. Before any BoAmps contribution, review identifiers, dataset terms, and the native hardware fields against observed inventory; passing the schema does not test downstream ingestion or publication readiness.
+Nothing was submitted upstream to BoAmps. Before any contribution, review
+identifiers, dataset terms, and native hardware metadata against observed
+inventory.
+
+## Files
+
+| Path | Contents |
+|---|---|
+| `results/gpu_widths_01/SUMMARY.md` | Width-sweep conditions, coverage, and comparisons |
+| `results/gpu_widths_01/audit-notes.md` | Export-side audit of sampling, retries, determinism, and corrections |
+| `results/gpu_widths_01/inference_medians.csv` | Condition medians, ranges, counters, sampling |
+| `results/gpu_widths_01/packed-context.csv` | Per-run Joey context maxima and digests |
+| `results/gpu_widths_01/width1-comparison.csv` | Descriptive paired width-vs-1 agreement counts (no p-values) |
+| `results/gpu_widths_01/width1-disagreements.csv` | Per-tweet label changes by width |
+| `results/gpu_widths_01/runs.csv`, `trials.csv`, `class_quality.csv`, `energy_components.csv`, `energy_intensity.csv`, `performance.csv` | Standard analysis tables |
+| `results/gpu_widths_01/verification.json` | Native-report and prediction audit |
+| `results/full_isolated_02/DETAILS.md` | Preserved baseline report |
+| `results/full_isolated_02/` | Baseline CSVs, notebook, and verification receipt |

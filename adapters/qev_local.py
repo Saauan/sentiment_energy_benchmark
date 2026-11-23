@@ -79,6 +79,7 @@ _CONTROL_KEYS = {
     "init_timeout_s",
     "request_timeout_s",
     "close_timeout_s",
+    "request_mode",
 }
 
 
@@ -106,6 +107,12 @@ class QEVLocalAdapter:
         unknown = set(self.params) - _ENGINE_KEYS - _CONTROL_KEYS
         if unknown:
             raise ValueError(f"unknown QEV params: {sorted(unknown)}")
+        self.request_mode = self.params.get("request_mode", "single")
+        if self.request_mode not in {"single", "packed"}:
+            raise ValueError("params['request_mode'] must be 'single' or 'packed'")
+        if self.request_mode == "packed" and self.repo != "baselabs/joey-1":
+            raise Unavailable("packed mode is only enabled for Joey-1")
+        self.supported_batches = (1, 4, 16, 64, 256) if self.request_mode == "packed" else (1,)
         self.debias = self.params.get("debias", 1)
         if isinstance(self.debias, bool) or not isinstance(self.debias, int) or self.debias < 1:
             raise ValueError("params['debias'] must be an integer >= 1")
@@ -232,7 +239,9 @@ class QEVLocalAdapter:
                     "onejev_revision": ONEJEV_REVISION,
                     "serve_patch_blob": PATCH_BLOB,
                     "supported_batches": list(self.supported_batches),
-                    "independent_tweets_per_request": 1,
+                    "request_mode": self.request_mode,
+                    "independent_tweets_per_request": 1 if self.request_mode == "single" else None,
+                    "request_semantics": "one shared state with multiple targeted questions" if self.request_mode == "packed" else "one tweet per request",
                     "debias": self.debias,
                     "debug": self.debug,
                     "engine_options": self._engine_options(),
@@ -336,15 +345,58 @@ class QEVLocalAdapter:
                 raise RuntimeError(f"QEV worker {kind}: {text}")
             return response.get("result")
 
+    def _validate_texts(self, texts: list[str]) -> None:
+        if not isinstance(texts, list) or not texts or not all(isinstance(text, str) for text in texts):
+            raise TypeError("QEV expects a nonempty list of strings")
+        if len(texts) > (256 if self.request_mode == "packed" else 1):
+            raise Unavailable("QEV request exceeds supported width")
+
+    def check_context(self, texts: list[str]) -> dict[str, Any]:
+        """Exact tokenizer-only request preflight; no model forward is performed."""
+        self._validate_texts(texts)
+        receipt = self._rpc("check_context", {"texts": texts, "debias": self.debias, "request_mode": self.request_mode})
+        if not receipt["fit"]:
+            failures = [f"{c['name']}: {c['measured']} > {c['limit']}" for c in receipt["checks"] if not c["fit"]]
+            exc = Unavailable("QEV context preflight failed: " + "; ".join(failures))
+            exc.context_receipt = receipt
+            raise exc
+        return receipt
+
     def predict(self, texts: list[str]) -> list[dict[str, Any]]:
         if not texts:
             return []
-        if len(texts) != 1:
+        if self.request_mode == "single" and len(texts) != 1:
             raise Unavailable("QEV supports only one independent tweet per request; batch 16 is unverified")
-        if not isinstance(texts[0], str):
-            raise TypeError("QEV predict expects strings")
+        self._validate_texts(texts)
         started = time.perf_counter()
         try:
+            if self.request_mode == "packed":
+                result = self._rpc("predict_packed", {"texts": texts, "debias": self.debias, "debug": self.debug}, self.request_timeout_s)
+                if not result["context"]["fit"]:
+                    receipt = result["context"]
+                    failures = [f"{c['name']}: {c['measured']} > {c['limit']}" for c in receipt["checks"] if not c["fit"]]
+                    exc = Unavailable("QEV context preflight failed: " + "; ".join(failures))
+                    exc.context_receipt = receipt
+                    raise exc
+                ids = result["request"]["question_ids"]
+                if len(ids) != len(texts) or len(set(ids)) != len(ids) or set(result["answers"]) != set(ids):
+                    raise RuntimeError("QEV packed answer mapping does not match question IDs")
+                outputs = []
+                for index, qid in enumerate(ids):
+                    answer = result["answers"][qid]
+                    if not isinstance(answer, dict) or answer.get("type") != "choice" or not isinstance(answer.get("probabilities"), dict):
+                        raise RuntimeError(f"invalid QEV packed answer for {qid}")
+                    raw = {"answer": answer, "question_id": qid, "target_number": index + 1, "request_width": len(ids)}
+                    if index == 0:
+                        raw.update(usage=result["usage"], runtime=result["runtime"], context=result["context"], request=result["request"])
+                    output = {"label": answer.get("choice") if answer.get("choice") in LABELS else None, "raw": raw}
+                    if len(texts) == 1:
+                        output["latency_s"] = time.perf_counter() - started
+                    else:
+                        output["latency_scope"] = "packed_request_completion"
+                    outputs.append(output)
+                json.dumps(outputs, allow_nan=False)
+                return outputs
             result = self._rpc(
                 "predict",
                 {"text": texts[0], "debias": self.debias, "debug": self.debug},

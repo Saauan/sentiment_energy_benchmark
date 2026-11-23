@@ -39,6 +39,7 @@ COUNT_FIELDS = (
     "retry_requests",
     "http_request_count",
     "qev_choice_count",
+    "qev_request_count",
     "final_group_width",
 )
 QUALITY_FIELDS = (
