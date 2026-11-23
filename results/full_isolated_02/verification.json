@@ -1,0 +1,1638 @@
+{
+  "root": "artifacts/full_isolated_02",
+  "phase": "full",
+  "counts": {
+    "pending": 0,
+    "running": 0,
+    "complete": 81,
+    "incomplete": 0,
+    "failed": 0,
+    "skipped": 81
+  },
+  "runs": [
+    {
+      "run_id": "89b9a1b2bde299f097fd086d",
+      "kind": "device_idle",
+      "model": "joey1",
+      "batch_size": 1,
+      "rep": 1,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "a82e5474b0c130a7f8b31985",
+      "kind": "loaded_idle",
+      "model": "joey1",
+      "batch_size": 1,
+      "rep": 1,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "e2fe4f4c05eb4beb9fb840fc",
+      "kind": "inference",
+      "model": "joey1",
+      "batch_size": 1,
+      "rep": 1,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "3b02104e1921b6da1331d9d5",
+      "kind": "device_idle",
+      "model": "qwen9b",
+      "batch_size": 16,
+      "rep": 0,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (18412 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "a08734ea147c18bcf5992b00",
+      "kind": "loaded_idle",
+      "model": "qwen9b",
+      "batch_size": 16,
+      "rep": 0,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (18412 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "6381246fd8a75f873717a397",
+      "kind": "inference",
+      "model": "qwen9b",
+      "batch_size": 16,
+      "rep": 0,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (18412 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "9d372edcab6421cebe505cfb",
+      "kind": "device_idle",
+      "model": "fasttext",
+      "batch_size": 16,
+      "rep": 0,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "0a3fcae0fcab1eee637d1c20",
+      "kind": "training",
+      "model": "fasttext",
+      "batch_size": 16,
+      "rep": 0,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "9ecccace4c4feab896ea0e76",
+      "kind": "inference",
+      "model": "fasttext",
+      "batch_size": 16,
+      "rep": 0,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "0094d77b7d495833008620f0",
+      "kind": "device_idle",
+      "model": "qwen27b",
+      "batch_size": 16,
+      "rep": 0,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (52989 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "dd0e26612b6ca965c941fdd6",
+      "kind": "loaded_idle",
+      "model": "qwen27b",
+      "batch_size": 16,
+      "rep": 0,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (52989 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "af3c50d624eec9c66eafe0bb",
+      "kind": "inference",
+      "model": "qwen27b",
+      "batch_size": 16,
+      "rep": 0,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (52989 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "46938a19afcec2102b23c457",
+      "kind": "device_idle",
+      "model": "fasttext",
+      "batch_size": 1,
+      "rep": 2,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "46fac4dd4cabb8ab14c66174",
+      "kind": "training",
+      "model": "fasttext",
+      "batch_size": 1,
+      "rep": 2,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "53091a13a0d62078cb74707a",
+      "kind": "inference",
+      "model": "fasttext",
+      "batch_size": 1,
+      "rep": 2,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "954b90e5c05c88dde480994e",
+      "kind": "device_idle",
+      "model": "qwen27b",
+      "batch_size": 1,
+      "rep": 2,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (52989 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "ab7a9e968e57617cd53dacc7",
+      "kind": "loaded_idle",
+      "model": "qwen27b",
+      "batch_size": 1,
+      "rep": 2,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (52989 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "439ecaea9a97cd3c51380bad",
+      "kind": "inference",
+      "model": "qwen27b",
+      "batch_size": 1,
+      "rep": 2,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (52989 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "4efc52db9083773276dde612",
+      "kind": "device_idle",
+      "model": "fasttext",
+      "batch_size": 1,
+      "rep": 1,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "34c3e62bf780bffe55c60289",
+      "kind": "training",
+      "model": "fasttext",
+      "batch_size": 1,
+      "rep": 1,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "312c0eba04797007e25d1370",
+      "kind": "inference",
+      "model": "fasttext",
+      "batch_size": 1,
+      "rep": 1,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "ebfc5319f41f97e6c328460b",
+      "kind": "device_idle",
+      "model": "qwen27b",
+      "batch_size": 1,
+      "rep": 0,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (52989 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "e90ecce4c4306b5dc7e48cd0",
+      "kind": "loaded_idle",
+      "model": "qwen27b",
+      "batch_size": 1,
+      "rep": 0,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (52989 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "eb945cae9fdae41ba8d75fd9",
+      "kind": "inference",
+      "model": "qwen27b",
+      "batch_size": 1,
+      "rep": 0,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (52989 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "a086f38a0bcc958ca625e44b",
+      "kind": "device_idle",
+      "model": "qwen2b",
+      "batch_size": 1,
+      "rep": 0,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "50f63b6c0b61fc23588129b4",
+      "kind": "loaded_idle",
+      "model": "qwen2b",
+      "batch_size": 1,
+      "rep": 0,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "4423198527feec8c1ee77a58",
+      "kind": "inference",
+      "model": "qwen2b",
+      "batch_size": 1,
+      "rep": 0,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "e985e20d02689de542ffc26e",
+      "kind": "device_idle",
+      "model": "qwen9b",
+      "batch_size": 1,
+      "rep": 1,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (18412 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "4aa340a7760a6ea39aeb6478",
+      "kind": "loaded_idle",
+      "model": "qwen9b",
+      "batch_size": 1,
+      "rep": 1,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (18412 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "e52e54c324b84ca234a3c8e6",
+      "kind": "inference",
+      "model": "qwen9b",
+      "batch_size": 1,
+      "rep": 1,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (18412 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "9032533aac652b196cb49304",
+      "kind": "device_idle",
+      "model": "qwen2b",
+      "batch_size": 16,
+      "rep": 0,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "f37c39131b61226d759ff64e",
+      "kind": "loaded_idle",
+      "model": "qwen2b",
+      "batch_size": 16,
+      "rep": 0,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "c40690199e539498898622bb",
+      "kind": "inference",
+      "model": "qwen2b",
+      "batch_size": 16,
+      "rep": 0,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "bfe7004dfe865285f05dc05e",
+      "kind": "device_idle",
+      "model": "joey1",
+      "batch_size": 1,
+      "rep": 2,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "36efc2b8b6132eface6cb325",
+      "kind": "loaded_idle",
+      "model": "joey1",
+      "batch_size": 1,
+      "rep": 2,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "0339674808a330cb6c200122",
+      "kind": "inference",
+      "model": "joey1",
+      "batch_size": 1,
+      "rep": 2,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "ff516ae848b6a2810b7bfaeb",
+      "kind": "device_idle",
+      "model": "mammoth1",
+      "batch_size": 1,
+      "rep": 1,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (52179 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "fba6c465dbc3b7d717b37c9a",
+      "kind": "loaded_idle",
+      "model": "mammoth1",
+      "batch_size": 1,
+      "rep": 1,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (52179 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "ade7223e0a54c8b519192332",
+      "kind": "inference",
+      "model": "mammoth1",
+      "batch_size": 1,
+      "rep": 1,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (52179 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "e58e42e64e0215fb3408d4c5",
+      "kind": "device_idle",
+      "model": "qwen27b",
+      "batch_size": 1,
+      "rep": 1,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (52989 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "10e8ff8366a95597b39afc9c",
+      "kind": "loaded_idle",
+      "model": "qwen27b",
+      "batch_size": 1,
+      "rep": 1,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (52989 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "b04350e3c30865c5a53d152e",
+      "kind": "inference",
+      "model": "qwen27b",
+      "batch_size": 1,
+      "rep": 1,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (52989 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "738aa6c354ecddfffe003e1d",
+      "kind": "device_idle",
+      "model": "fasttext",
+      "batch_size": 16,
+      "rep": 1,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "11132ef46bb611af6e0d0b5e",
+      "kind": "training",
+      "model": "fasttext",
+      "batch_size": 16,
+      "rep": 1,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "e9370a536d943f9f6fa7c3cd",
+      "kind": "inference",
+      "model": "fasttext",
+      "batch_size": 16,
+      "rep": 1,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "d3c13fa006b22c29fe70e079",
+      "kind": "device_idle",
+      "model": "elephant1",
+      "batch_size": 1,
+      "rep": 2,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (17948 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "c47b6d4ebc63348c44628817",
+      "kind": "loaded_idle",
+      "model": "elephant1",
+      "batch_size": 1,
+      "rep": 2,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (17948 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "5cd1d030dcf464d1a2ceebeb",
+      "kind": "inference",
+      "model": "elephant1",
+      "batch_size": 1,
+      "rep": 2,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (17948 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "9872a2a059808a6852c5302a",
+      "kind": "device_idle",
+      "model": "elephant1",
+      "batch_size": 1,
+      "rep": 1,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (17948 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "b9c3fd5422f934051ade03b2",
+      "kind": "loaded_idle",
+      "model": "elephant1",
+      "batch_size": 1,
+      "rep": 1,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (17948 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "6d8bd5facff78eb0a8a16f89",
+      "kind": "inference",
+      "model": "elephant1",
+      "batch_size": 1,
+      "rep": 1,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (17948 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "4ed247138fb04e7eecbd87b2",
+      "kind": "device_idle",
+      "model": "nb",
+      "batch_size": 16,
+      "rep": 0,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "fe4c0c9ecd97b573b1bb7bd1",
+      "kind": "training",
+      "model": "nb",
+      "batch_size": 16,
+      "rep": 0,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "742bf381f5e577ef1a49417b",
+      "kind": "inference",
+      "model": "nb",
+      "batch_size": 16,
+      "rep": 0,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "1c682e35b289575d09703551",
+      "kind": "device_idle",
+      "model": "qwen2b",
+      "batch_size": 1,
+      "rep": 1,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "bb33ec28fb96b765934bf04b",
+      "kind": "loaded_idle",
+      "model": "qwen2b",
+      "batch_size": 1,
+      "rep": 1,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "15a6c4359fab5499c3c37d06",
+      "kind": "inference",
+      "model": "qwen2b",
+      "batch_size": 1,
+      "rep": 1,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "f1083c1414ca69ca8cbd028a",
+      "kind": "device_idle",
+      "model": "mammoth1",
+      "batch_size": 16,
+      "rep": 1,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (52179 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "3551c2848b5841966f429824",
+      "kind": "loaded_idle",
+      "model": "mammoth1",
+      "batch_size": 16,
+      "rep": 1,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (52179 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "44009051b387543e16b8765b",
+      "kind": "inference",
+      "model": "mammoth1",
+      "batch_size": 16,
+      "rep": 1,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (52179 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "441bcb3f4eea57fce4dbadbc",
+      "kind": "device_idle",
+      "model": "svm",
+      "batch_size": 1,
+      "rep": 0,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "8ca97e3d430f43bab605f7ce",
+      "kind": "training",
+      "model": "svm",
+      "batch_size": 1,
+      "rep": 0,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "0c796b17835efa9f50b52894",
+      "kind": "inference",
+      "model": "svm",
+      "batch_size": 1,
+      "rep": 0,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "f74d9a21852e6dfeca4bc495",
+      "kind": "device_idle",
+      "model": "svm",
+      "batch_size": 16,
+      "rep": 0,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "8684f774100af90810aa03e1",
+      "kind": "training",
+      "model": "svm",
+      "batch_size": 16,
+      "rep": 0,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "096ce0cb8a7c12c22529824c",
+      "kind": "inference",
+      "model": "svm",
+      "batch_size": 16,
+      "rep": 0,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "8267c3c1d84a82e41ec79818",
+      "kind": "device_idle",
+      "model": "nb",
+      "batch_size": 1,
+      "rep": 2,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "c4d6e4eb6b990b4e6a7df3fb",
+      "kind": "training",
+      "model": "nb",
+      "batch_size": 1,
+      "rep": 2,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "aa95b8244ee6df2eb7c5c237",
+      "kind": "inference",
+      "model": "nb",
+      "batch_size": 1,
+      "rep": 2,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "f4dbe12b7178f41bdf086592",
+      "kind": "device_idle",
+      "model": "elephant1",
+      "batch_size": 1,
+      "rep": 0,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (17948 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "6b1ac77cd273239821cb5da5",
+      "kind": "loaded_idle",
+      "model": "elephant1",
+      "batch_size": 1,
+      "rep": 0,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (17948 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "85676e4bc5a114c7bafc35ac",
+      "kind": "inference",
+      "model": "elephant1",
+      "batch_size": 1,
+      "rep": 0,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (17948 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "2fd9171a5f3af9773b07cc66",
+      "kind": "device_idle",
+      "model": "mammoth1",
+      "batch_size": 16,
+      "rep": 2,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (52179 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "e15bd00d525ef0d9f68f0f4a",
+      "kind": "loaded_idle",
+      "model": "mammoth1",
+      "batch_size": 16,
+      "rep": 2,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (52179 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "4fbcf3062bd8f4020a00f289",
+      "kind": "inference",
+      "model": "mammoth1",
+      "batch_size": 16,
+      "rep": 2,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (52179 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "e406cd06cbfa35252a557f90",
+      "kind": "device_idle",
+      "model": "nb",
+      "batch_size": 1,
+      "rep": 0,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "2da70f095db37fdbfd56886e",
+      "kind": "training",
+      "model": "nb",
+      "batch_size": 1,
+      "rep": 0,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "ed246878dc7c7d5af779664e",
+      "kind": "inference",
+      "model": "nb",
+      "batch_size": 1,
+      "rep": 0,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "d5099c05def3fc313dc27368",
+      "kind": "device_idle",
+      "model": "nb",
+      "batch_size": 16,
+      "rep": 1,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "ae3d9d92b74d5ec5d1b938d3",
+      "kind": "training",
+      "model": "nb",
+      "batch_size": 16,
+      "rep": 1,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "6ed91b8e9cc2e2f5f800d4c8",
+      "kind": "inference",
+      "model": "nb",
+      "batch_size": 16,
+      "rep": 1,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "f6d36ca638f32af00a885c1c",
+      "kind": "device_idle",
+      "model": "qwen9b",
+      "batch_size": 1,
+      "rep": 0,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (18412 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "cd813bcd01aa62620ada5fb3",
+      "kind": "loaded_idle",
+      "model": "qwen9b",
+      "batch_size": 1,
+      "rep": 0,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (18412 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "682ddfb79ff51c46de61e738",
+      "kind": "inference",
+      "model": "qwen9b",
+      "batch_size": 1,
+      "rep": 0,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (18412 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "351067505acd64ecdf05684a",
+      "kind": "device_idle",
+      "model": "joey1",
+      "batch_size": 16,
+      "rep": 1,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: qev does not support independent batch 16",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "30da969148a8cf09d542328b",
+      "kind": "loaded_idle",
+      "model": "joey1",
+      "batch_size": 16,
+      "rep": 1,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: qev does not support independent batch 16",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "5121a838a07081ccf6f13ffa",
+      "kind": "inference",
+      "model": "joey1",
+      "batch_size": 16,
+      "rep": 1,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: qev does not support independent batch 16",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "b61b473052e7a3b8737d5449",
+      "kind": "device_idle",
+      "model": "mammoth1",
+      "batch_size": 1,
+      "rep": 0,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (52179 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "0d11b24c8df1413274ea2ab6",
+      "kind": "loaded_idle",
+      "model": "mammoth1",
+      "batch_size": 1,
+      "rep": 0,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (52179 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "a5adc3e844c9958af050e0af",
+      "kind": "inference",
+      "model": "mammoth1",
+      "batch_size": 1,
+      "rep": 0,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (52179 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "f29a5adb6d41833a0fbb1666",
+      "kind": "device_idle",
+      "model": "fasttext",
+      "batch_size": 16,
+      "rep": 2,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "dafa26fcdcac1dec3c15c6b8",
+      "kind": "training",
+      "model": "fasttext",
+      "batch_size": 16,
+      "rep": 2,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "f2be9fc65878818acef17fd3",
+      "kind": "inference",
+      "model": "fasttext",
+      "batch_size": 16,
+      "rep": 2,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "68a0270bd68fcb876cc32b87",
+      "kind": "device_idle",
+      "model": "nb",
+      "batch_size": 16,
+      "rep": 2,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "0d585c06a9bd4425b91cb08b",
+      "kind": "training",
+      "model": "nb",
+      "batch_size": 16,
+      "rep": 2,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "e1038ac62c99896d2313927b",
+      "kind": "inference",
+      "model": "nb",
+      "batch_size": 16,
+      "rep": 2,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "eb9720da1117f83edc7c07de",
+      "kind": "device_idle",
+      "model": "qwen9b",
+      "batch_size": 16,
+      "rep": 1,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (18412 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "24357328b64b370afcb23e9d",
+      "kind": "loaded_idle",
+      "model": "qwen9b",
+      "batch_size": 16,
+      "rep": 1,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (18412 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "48269241e6be05b3f05ceb1b",
+      "kind": "inference",
+      "model": "qwen9b",
+      "batch_size": 16,
+      "rep": 1,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (18412 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "ebc3b5169578d9f70a3017f9",
+      "kind": "device_idle",
+      "model": "qwen2b",
+      "batch_size": 1,
+      "rep": 2,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "3d2623e624bd87e2dbb6a422",
+      "kind": "loaded_idle",
+      "model": "qwen2b",
+      "batch_size": 1,
+      "rep": 2,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "e8a8853468759c218f568ce6",
+      "kind": "inference",
+      "model": "qwen2b",
+      "batch_size": 1,
+      "rep": 2,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "7df8a1c4d7ccd893be3e388d",
+      "kind": "device_idle",
+      "model": "joey1",
+      "batch_size": 1,
+      "rep": 0,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0002"
+    },
+    {
+      "run_id": "d6719808c96c58bf1d5821d3",
+      "kind": "loaded_idle",
+      "model": "joey1",
+      "batch_size": 1,
+      "rep": 0,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "87c2fd8a80490030d65cc9cb",
+      "kind": "inference",
+      "model": "joey1",
+      "batch_size": 1,
+      "rep": 0,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "bab9b312940562f1d300d904",
+      "kind": "device_idle",
+      "model": "qwen9b",
+      "batch_size": 1,
+      "rep": 2,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (18412 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "452ac490dafe422766fbbdb5",
+      "kind": "loaded_idle",
+      "model": "qwen9b",
+      "batch_size": 1,
+      "rep": 2,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (18412 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "5df3e1453e90f792b7bab0c0",
+      "kind": "inference",
+      "model": "qwen9b",
+      "batch_size": 1,
+      "rep": 2,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (18412 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "c990aa146478732d2afe2b8a",
+      "kind": "device_idle",
+      "model": "qwen27b",
+      "batch_size": 16,
+      "rep": 1,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (52989 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "d7ca18e0654603752c78c6ee",
+      "kind": "loaded_idle",
+      "model": "qwen27b",
+      "batch_size": 16,
+      "rep": 1,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (52989 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "96cc8c7ce225ce63dded095e",
+      "kind": "inference",
+      "model": "qwen27b",
+      "batch_size": 16,
+      "rep": 1,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (52989 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "3b23f6f04a293554dec38c7f",
+      "kind": "device_idle",
+      "model": "qwen2b",
+      "batch_size": 16,
+      "rep": 2,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "1954b247ea833255d4b0654d",
+      "kind": "loaded_idle",
+      "model": "qwen2b",
+      "batch_size": 16,
+      "rep": 2,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "da1efc7d0a82ba574c85550c",
+      "kind": "inference",
+      "model": "qwen2b",
+      "batch_size": 16,
+      "rep": 2,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "9aa40aadb98f7d7ee30759fe",
+      "kind": "device_idle",
+      "model": "qwen27b",
+      "batch_size": 16,
+      "rep": 2,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (52989 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "3ed6cc004c1b9229d492ffa4",
+      "kind": "loaded_idle",
+      "model": "qwen27b",
+      "batch_size": 16,
+      "rep": 2,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (52989 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "445af835a519dfab998ad865",
+      "kind": "inference",
+      "model": "qwen27b",
+      "batch_size": 16,
+      "rep": 2,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (52989 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "47f68f52e30ac3563fd77252",
+      "kind": "device_idle",
+      "model": "qwen2b",
+      "batch_size": 16,
+      "rep": 1,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "b54df79ac1432102f21532ee",
+      "kind": "loaded_idle",
+      "model": "qwen2b",
+      "batch_size": 16,
+      "rep": 1,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "84579cac0f383d5ec4171ee9",
+      "kind": "inference",
+      "model": "qwen2b",
+      "batch_size": 16,
+      "rep": 1,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "f541a3831abee14c8f8d6334",
+      "kind": "device_idle",
+      "model": "mammoth1",
+      "batch_size": 1,
+      "rep": 2,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (52179 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "9b8576997bbf5833f7d1ad42",
+      "kind": "loaded_idle",
+      "model": "mammoth1",
+      "batch_size": 1,
+      "rep": 2,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (52179 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "eb5d3a8ee781d44efc187ab3",
+      "kind": "inference",
+      "model": "mammoth1",
+      "batch_size": 1,
+      "rep": 2,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (52179 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "897400c3551ac500c15bef46",
+      "kind": "device_idle",
+      "model": "elephant1",
+      "batch_size": 16,
+      "rep": 0,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (17948 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "06f9adddd8f2b510f4372978",
+      "kind": "loaded_idle",
+      "model": "elephant1",
+      "batch_size": 16,
+      "rep": 0,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (17948 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "8f9a67773f981c3701536251",
+      "kind": "inference",
+      "model": "elephant1",
+      "batch_size": 16,
+      "rep": 0,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (17948 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "fd4c664629e00e839ac2337d",
+      "kind": "device_idle",
+      "model": "elephant1",
+      "batch_size": 16,
+      "rep": 2,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (17948 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "d6f1c26b90de28fa5b909d4a",
+      "kind": "loaded_idle",
+      "model": "elephant1",
+      "batch_size": 16,
+      "rep": 2,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (17948 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "5b1facee436d9ecec57fb379",
+      "kind": "inference",
+      "model": "elephant1",
+      "batch_size": 16,
+      "rep": 2,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (17948 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "75d8132d612ab41f52887b42",
+      "kind": "device_idle",
+      "model": "qwen9b",
+      "batch_size": 16,
+      "rep": 2,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (18412 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "57dd523f27445dc6bb884de2",
+      "kind": "loaded_idle",
+      "model": "qwen9b",
+      "batch_size": 16,
+      "rep": 2,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (18412 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "1713c6cde4bb1757f2dd3164",
+      "kind": "inference",
+      "model": "qwen9b",
+      "batch_size": 16,
+      "rep": 2,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (18412 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "7d9c2e8142197fb34acbeb8b",
+      "kind": "device_idle",
+      "model": "joey1",
+      "batch_size": 16,
+      "rep": 2,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: qev does not support independent batch 16",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "67dd5f35e3a3b0ae7454944c",
+      "kind": "loaded_idle",
+      "model": "joey1",
+      "batch_size": 16,
+      "rep": 2,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: qev does not support independent batch 16",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "79d317848ba332351d55c4d6",
+      "kind": "inference",
+      "model": "joey1",
+      "batch_size": 16,
+      "rep": 2,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: qev does not support independent batch 16",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "7c074d6e313d5029ea0904d2",
+      "kind": "device_idle",
+      "model": "elephant1",
+      "batch_size": 16,
+      "rep": 1,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (17948 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "b1834907c5e8dc779d9ccb01",
+      "kind": "loaded_idle",
+      "model": "elephant1",
+      "batch_size": 16,
+      "rep": 1,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (17948 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "fff6dce65ad0e26f103b6019",
+      "kind": "inference",
+      "model": "elephant1",
+      "batch_size": 16,
+      "rep": 1,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (17948 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "685d824be0b688d7caf05654",
+      "kind": "device_idle",
+      "model": "fasttext",
+      "batch_size": 1,
+      "rep": 0,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "097a4b7a3f587648f4c78670",
+      "kind": "training",
+      "model": "fasttext",
+      "batch_size": 1,
+      "rep": 0,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "debcac34aeefea43e95f76e7",
+      "kind": "inference",
+      "model": "fasttext",
+      "batch_size": 1,
+      "rep": 0,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "df4bea5b6953e6d9d5957f44",
+      "kind": "device_idle",
+      "model": "svm",
+      "batch_size": 16,
+      "rep": 2,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "67bad2936fd322f3dcd3028e",
+      "kind": "training",
+      "model": "svm",
+      "batch_size": 16,
+      "rep": 2,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "8f8717fadcae632b88017b09",
+      "kind": "inference",
+      "model": "svm",
+      "batch_size": 16,
+      "rep": 2,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "947ee0b5014206f6804cb523",
+      "kind": "device_idle",
+      "model": "svm",
+      "batch_size": 1,
+      "rep": 1,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "63781569410d2aa43216c3e2",
+      "kind": "training",
+      "model": "svm",
+      "batch_size": 1,
+      "rep": 1,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "1b27f990d82bfdb3eae6fd70",
+      "kind": "inference",
+      "model": "svm",
+      "batch_size": 1,
+      "rep": 1,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "15d0eab0d88e5732b4744101",
+      "kind": "device_idle",
+      "model": "nb",
+      "batch_size": 1,
+      "rep": 1,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "23fad3f6367ddf9790e8f448",
+      "kind": "training",
+      "model": "nb",
+      "batch_size": 1,
+      "rep": 1,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "cfb0be7124022d04e72af687",
+      "kind": "inference",
+      "model": "nb",
+      "batch_size": 1,
+      "rep": 1,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "d97a69bf9fb4823772638c35",
+      "kind": "device_idle",
+      "model": "joey1",
+      "batch_size": 16,
+      "rep": 0,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: qev does not support independent batch 16",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "4cfb4059dbb6708f62467637",
+      "kind": "loaded_idle",
+      "model": "joey1",
+      "batch_size": 16,
+      "rep": 0,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: qev does not support independent batch 16",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "f096962de4c9cd9f156f81e0",
+      "kind": "inference",
+      "model": "joey1",
+      "batch_size": 16,
+      "rep": 0,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: qev does not support independent batch 16",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "e307145fe7ec93d6ae7928b3",
+      "kind": "device_idle",
+      "model": "mammoth1",
+      "batch_size": 16,
+      "rep": 0,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (52179 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "6250464567952ad69e68e2e5",
+      "kind": "loaded_idle",
+      "model": "mammoth1",
+      "batch_size": 16,
+      "rep": 0,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (52179 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "81c3959f6a9e729115627a44",
+      "kind": "inference",
+      "model": "mammoth1",
+      "batch_size": 16,
+      "rep": 0,
+      "status": "skipped",
+      "reason": "block dependency did not complete: Unavailable: weight bytes alone exceed GPU total VRAM (52179 vs 12227 MiB); no download/load",
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "0358ea78e39f0247dd6c594a",
+      "kind": "device_idle",
+      "model": "svm",
+      "batch_size": 16,
+      "rep": 1,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "f3860c74c3c6c62d4156f42d",
+      "kind": "training",
+      "model": "svm",
+      "batch_size": 16,
+      "rep": 1,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "e33eb43850a4b2f0d7e2d78a",
+      "kind": "inference",
+      "model": "svm",
+      "batch_size": 16,
+      "rep": 1,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "64f1014fe37151836d5a4416",
+      "kind": "device_idle",
+      "model": "svm",
+      "batch_size": 1,
+      "rep": 2,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "a7a52e61b8a49cf170538007",
+      "kind": "training",
+      "model": "svm",
+      "batch_size": 1,
+      "rep": 2,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    },
+    {
+      "run_id": "7f57a3f23876800cf41eda02",
+      "kind": "inference",
+      "model": "svm",
+      "batch_size": 1,
+      "rep": 2,
+      "status": "complete",
+      "reason": null,
+      "active_attempt": "attempt-0001"
+    }
+  ],
+  "ok": true,
+  "inconsistencies": [],
+  "low_sampling": [],
+  "valid_complete": 81
+}

@@ -1,0 +1,9 @@
+.scratch/
+.venv*/
+__pycache__/
+.pytest_cache/
+.marimo/
+__marimo__/
+data/tweeteval/
+artifacts/
+*.tmp.*
