@@ -211,12 +211,8 @@ def prepare(cfg, task, tracker, schema_pin, codecarbon_pin):
     }
 
 
-def build_tracker(cfg, task, out, codecarbon_pin):
-    """The pinned tracker configuration, byte-for-byte the previous setup.
-
-    The pinned CodeCarbon log is attached here exactly as the in-process meter
-    did, so the artifact keeps the same ``codecarbon.log`` file.
-    """
+def build_tracker(cfg, task, out, codecarbon_pin, *, boamps_output=None):
+    """Set up the pinned tracker, optionally supplying our BoAmps handler."""
     if codecarbon_pin and version("codecarbon") != codecarbon_pin:
         raise RuntimeError(f"CodeCarbon {codecarbon_pin} required")
     import logging
@@ -228,12 +224,17 @@ def build_tracker(cfg, task, out, codecarbon_pin):
     handler = logging.FileHandler(Path(out) / "codecarbon.log", encoding="utf-8")
     logger.addHandler(handler)
     try:
+        outputs = [OutputMethod.CSV, OutputMethod.BOAMPS]
+        kwargs = {}
+        if boamps_output is not None:
+            outputs.remove(OutputMethod.BOAMPS)
+            kwargs["output_handlers"] = [boamps_output]
         return OfflineEmissionsTracker(
             country_iso_code=cfg["country_iso_code"], output_dir=str(out), output_file="emissions.csv",
-            output_methods=[OutputMethod.CSV, OutputMethod.BOAMPS], tracking_mode="machine",
+            output_methods=outputs, tracking_mode="machine",
             gpu_ids=cfg.get("gpu_ids"), measure_power_secs=cfg["sample_secs"],
             metadata={"boamps": {"task": task}}, pue=1.0, allow_multiple_runs=True, log_level="info",
-            on_csv_write="append", experiment_name="sentiment-energy-benchmark")
+            on_csv_write="append", experiment_name="sentiment-energy-benchmark", **kwargs)
     except BaseException:
         logger.removeHandler(handler)
         handler.close()
@@ -243,7 +244,8 @@ def build_tracker(cfg, task, out, codecarbon_pin):
 class Worker:
     """Owns one CodeCarbon tracker for exactly one measurement window."""
 
-    def __init__(self, out, cfg, task, channel, tracker_factory=None, schema_pin=None, codecarbon_pin=None):
+    def __init__(self, out, cfg, task, channel, tracker_factory=None, schema_pin=None, codecarbon_pin=None,
+                 *, export_tracking_modes=False):
         self.out = Path(out)
         self.cfg = cfg
         self.task = task
@@ -251,6 +253,7 @@ class Worker:
         self.tracker_factory = tracker_factory
         self.schema_pin = schema_pin
         self.codecarbon_pin = codecarbon_pin
+        self.export_tracking_modes = export_tracking_modes
         self.tracker = None
         self.ticks = None
         self.metadata = None
@@ -265,11 +268,18 @@ class Worker:
             pass
 
     def build(self):
+        output = None
         if self.tracker_factory is None:
-            self.tracker = build_tracker(self.cfg, self.task, self.out, self.codecarbon_pin)
+            if self.export_tracking_modes:
+                from boamps_export import TrackingBoAmpsOutput
+
+                output = TrackingBoAmpsOutput.from_dict({"task": self.task}, output_dir=str(self.out))
+            self.tracker = build_tracker(self.cfg, self.task, self.out, self.codecarbon_pin, boamps_output=output)
         else:
             self.tracker = self.tracker_factory(self.out, self.task, self.cfg)
         self.metadata = prepare(self.cfg, self.task, self.tracker, self.schema_pin, self.codecarbon_pin)
+        if output is not None:
+            output.sources = self.metadata["sources"]
         self.ticks = record_ticks(self.tracker)
         self.metadata["meter"] = {
             "protocol": f"meter-worker/{PROTOCOL_VERSION}", "mode": "separate_process",
@@ -449,6 +459,7 @@ def parse(argv):
     parser.add_argument("--task", required=True)
     parser.add_argument("--codecarbon-pin")
     parser.add_argument("--schema-pin")
+    parser.add_argument("--export-tracking-modes", action="store_true")
     return parser.parse_args(argv)
 
 
@@ -458,7 +469,7 @@ def main(argv=None, tracker_factory=None):
     out.mkdir(parents=True, exist_ok=True)
     worker = Worker(out, json.loads(args.config), json.loads(args.task), Channel(args.events_fd),
                     tracker_factory=tracker_factory, schema_pin=args.schema_pin,
-                    codecarbon_pin=args.codecarbon_pin)
+                    codecarbon_pin=args.codecarbon_pin, export_tracking_modes=args.export_tracking_modes)
     return worker.run()
 
 

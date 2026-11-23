@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Write RUN_ROOT/report/summary.md and analysis CSVs for a launcher-owned run.
 
-Read-only with respect to benchmark artifacts; only RUN_ROOT/report/ is written.
-No model is loaded and no measurement is started.
+Full runs also get report/inference_medians.csv: one row per planned model x width
+inference condition, aggregated only from receipt-verified replicas. Read-only with
+respect to benchmark artifacts; only RUN_ROOT/report/ is written. No model is loaded
+and no measurement is started.
 
 Usage:
     python launcher_report.py RUN_ROOT
@@ -11,6 +13,8 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import csv
+import io
 import json
 import math
 import statistics
@@ -26,6 +30,18 @@ from analysis import load_artifacts, write_tables
 
 STATUS_ORDER = ("complete", "pending", "running", "incomplete", "failed", "skipped", "invalid")
 VERIFIED, FAILED, UNVERIFIED, NOT_APPLICABLE = "verified", "failed verification", "unverified", "not applicable"
+
+# Display names follow the pinned protocol identities in RESULTS.md; CSV keeps model ids.
+PINNED_DISPLAY_NAMES = {
+    "svm": "TF–IDF + LinearSVC",
+    "nb": "TF–IDF + multinomial NB",
+    "fasttext": "fastText",
+}
+LATENCY_SCOPE_LABELS = {
+    "adapter request": "adapter request",
+    "closed-loop group completion": "group completion",
+    "packed_request_completion": "packed envelope",
+}
 
 
 def _text(value: Any) -> str | None:
@@ -62,12 +78,18 @@ def _stamp(path: Path) -> str | None:
     except OSError:
         return None
 
-def _median(values: Iterable[float | None]) -> float | None:
-    numbers = [value for value in values if value is not None]
-    return statistics.median(numbers) if numbers else None
-
-def _fmt(value: float | int | None) -> str:
-    return "—" if value is None else (f"{float(value):.4f}" if abs(float(value)) < 1000 else f"{float(value):,.1f}")
+def _sig(value: float | None, digits: int = 4) -> str:
+    """Format by significant digits so tiny energy is never rounded to zero."""
+    if value is None:
+        return "—"
+    if value == 0:
+        return "0"
+    magnitude = math.floor(math.log10(abs(value)))
+    decimals = digits - 1 - magnitude
+    if decimals > 12:
+        return f"{value:.{digits}g}"
+    decimals = max(decimals, 0)
+    return f"{value:,.{decimals}f}" if magnitude >= 0 else f"{value:.{decimals}f}"
 
 def _ratio(numerator: int, denominator: int) -> str:
     return "—" if denominator <= 0 else f"{numerator}/{denominator}"
@@ -142,6 +164,18 @@ class Trial:
     f1: float | None = None
     accuracy: float | None = None
     coverage: float | None = None
+    adapter: str | None = None
+    passes: int | None = None
+    device_adjusted: float | None = None
+    loaded_adjusted: float | None = None
+    window_s: float | None = None
+    throughput: float | None = None
+    latency_p50: float | None = None
+    latency_p95: float | None = None
+    group_latency_p50: float | None = None
+    group_latency_p95: float | None = None
+    latency_scopes: Mapping[str, Any] | None = None
+    gate: Mapping[str, Any] | None = None
     active_attempt: str | None = None
     issue: str | None = None
     state_status: str = "missing"
@@ -157,6 +191,19 @@ class Trial:
     @property
     def bad_samples(self) -> bool:
         return self.complete and self.submitted is not None and self.valid is not None and self.valid < self.submitted
+    @property
+    def low_sampling(self) -> bool | None:
+        """Sampling flag from the result gate; None when the artifact has no gate."""
+        gate = self.gate
+        if gate is None:
+            return None
+        flag = gate.get("low_sampling")
+        if isinstance(flag, bool):
+            return flag
+        meets = gate.get("meets_minimum_window")
+        if isinstance(meets, bool):
+            return not meets
+        return True  # A present but unusable gate never qualifies for energy.
     @property
     def energy_eligible(self) -> bool:
         return (self.complete and self.kind == "inference" and self.gross is not None
@@ -176,7 +223,8 @@ def build_trials(root: Path, plan: Mapping[str, Any] | None) -> list[Trial]:
         run_id = planned["run_id"]
         base = dict(run_id=run_id, model=_text(planned.get("model")) or "<model:missing>",
                     width=planned.get("batch_size"), kind=_text(planned.get("kind")) or "<kind:missing>",
-                    expected=_count(planned.get("expected_count")))
+                    expected=_count(planned.get("expected_count")),
+                    adapter=_text(planned.get("adapter")), passes=_count(planned.get("passes")))
         state_path = root / run_id / "state.json"
         if not state_path.is_file():
             trials.append(Trial(**base, status="pending"))
@@ -209,11 +257,25 @@ def build_trials(root: Path, plan: Mapping[str, Any] | None) -> list[Trial]:
                                 issue=issue, active_attempt=attempt))
             continue
         counts, quality, derived = _map(result.get("counts")), _map(result.get("quality")), _map(result.get("derived"))
+        performance = _map(result.get("performance"))
+        scopes = performance.get("latency_scopes")
+        gate = result.get("gate")
         trials.append(Trial(**base, status="complete", state_status=state_status,
                             submitted=_count(counts.get("submitted")), valid=_count(counts.get("valid")),
                             gross=_num(derived.get("gross_j_per_tweet")), recall=_num(quality.get("macro_recall")),
                             f1=_num(quality.get("macro_f1")), accuracy=_num(quality.get("accuracy")),
-                            coverage=_num(quality.get("coverage")), active_attempt=attempt, issue=issue))
+                            coverage=_num(quality.get("coverage")),
+                            device_adjusted=_num(derived.get("device_idle_adjusted_j_per_tweet")),
+                            loaded_adjusted=_num(derived.get("loaded_idle_adjusted_j_per_tweet")),
+                            window_s=_num(performance.get("window_s")),
+                            throughput=_num(performance.get("throughput_tweets_s")),
+                            latency_p50=_num(performance.get("latency_p50_s")),
+                            latency_p95=_num(performance.get("latency_p95_s")),
+                            group_latency_p50=_num(performance.get("group_latency_p50_s")),
+                            group_latency_p95=_num(performance.get("group_latency_p95_s")),
+                            latency_scopes=dict(scopes) if isinstance(scopes, Mapping) else None,
+                            gate=dict(gate) if isinstance(gate, Mapping) else None,
+                            active_attempt=attempt, issue=issue))
     return trials
 
 def resolve_selection(launcher: Mapping[str, Any], trials: Sequence[Trial]) -> tuple[str, set[str], str]:
@@ -284,12 +346,348 @@ def apply_verification(trials: Sequence[Trial], receipt: Mapping[str, Any]) -> N
                 trial.verification = VERIFIED
 
 # ---------------------------------------------------------------------------
+# Condition aggregation (verified inference replicas only)
+
+QUALITY_SOURCES = (
+    ("accuracy", "accuracy"),
+    ("coverage", "coverage"),
+    ("macro_recall", "recall"),
+    ("macro_f1", "f1"),
+)
+ENERGY_SOURCES = (
+    ("gross_j_per_tweet", "gross"),
+    ("device_idle_adjusted_j_per_tweet", "device_adjusted"),
+    ("loaded_idle_adjusted_j_per_tweet", "loaded_adjusted"),
+)
+
+
+@dataclass(frozen=True)
+class Metric:
+    """Observed replica statistics for one metric; empty when nothing was observed."""
+    median: float | None = None
+    minimum: float | None = None
+    maximum: float | None = None
+    n: int = 0
+
+
+def _metric(values: Iterable[float | None]) -> Metric:
+    numbers = [value for value in values if value is not None]
+    return Metric(statistics.median(numbers), min(numbers), max(numbers), len(numbers)) if numbers else Metric()
+
+
+def _milliseconds(value: float | None) -> float | None:
+    return None if value is None else value * 1000.0
+
+
+@dataclass
+class Condition:
+    """One model x width inference condition; never pooled with another width."""
+    model: str
+    width: Any
+    system: str
+    engine: str
+    adapter: str | None
+    passes: str
+    requested_reps: int | None
+    planned: int
+    complete: int
+    verified: int
+    energy_reps: int
+    low_sampling_excluded: int
+    count_shortfall_excluded: int
+    latency_scope: str | None
+    quality: dict[str, Metric]
+    energy: dict[str, Metric]
+    performance: dict[str, Metric]
+    note: str | None = None
+
+
+def receipt_low_sampling(receipt: Mapping[str, Any]) -> set[str]:
+    """Run ids that the verification receipt flagged for insufficient sampling."""
+    items = _map(receipt.get("data")).get("low_sampling")
+    identifiers = set()
+    for item in items if isinstance(items, list) else ():
+        run_id = _text(item.get("run_id")) if isinstance(item, Mapping) else _text(item)
+        if run_id:
+            identifiers.add(run_id)
+    return identifiers
+
+
+def _display_name(model: str, plan: Mapping[str, Any] | None) -> str:
+    """Pinned display name where known; the model id stays the identity in CSV."""
+    if model in PINNED_DISPLAY_NAMES:
+        return PINNED_DISPLAY_NAMES[model]
+    models = _map(_map(_map(plan).get("config")).get("models")) if plan else {}
+    repo = _text(_map(models.get(model)).get("repo"))
+    if repo:
+        name = repo.rstrip("/").rsplit("/", 1)[-1]
+        if name and not any(character.isupper() for character in name):
+            name = "-".join(part.capitalize() for part in name.split("-"))
+        if name:
+            return name
+    return model
+
+
+def _engine(model: str, planned: Sequence[Trial], plan: Mapping[str, Any] | None) -> tuple[str, str | None]:
+    models = _map(_map(_map(plan).get("config")).get("models")) if plan else {}
+    spec = _map(models.get(model))
+    adapter = _text(spec.get("adapter")) or next((trial.adapter for trial in planned if trial.adapter), None)
+    request_mode = _text(_map(spec.get("params")).get("request_mode"))
+    if adapter == "qev" and request_mode == "packed":
+        return "qev-packed", adapter
+    return (adapter or "—"), adapter
+
+
+def _width_number(value: Any) -> Any:
+    number = _num(value)
+    if number is None:
+        return "" if value is None else str(value)
+    return int(number) if number.is_integer() else number
+
+
+def _width_order(value: Any) -> tuple[int, Any]:
+    number = _num(value)
+    return (0, number) if number is not None else (1, str(value))
+
+
+def _width_cell(value: Any) -> str:
+    if value is None:
+        return "—"
+    return str(int(value)) if isinstance(value, float) and value.is_integer() else str(value)
+
+
+def _passes(planned: Sequence[Trial]) -> str:
+    values = sorted({trial.passes for trial in planned if trial.passes is not None})
+    return "/".join(str(value) for value in values) if values else ""
+
+
+def _trial_scope(trial: Trial) -> str | None:
+    """Selected latency scope for one replica; None when the artifact is ambiguous."""
+    scopes = set(trial.latency_scopes or {})
+    if "packed_request_completion" in scopes:
+        return "packed_request_completion"
+    if "closed-loop group completion" in scopes:
+        return "closed-loop group completion"
+    return "adapter request" if scopes == {"adapter request"} else None
+
+
+def _sampling_excluded(trial: Trial, receipt_ids: set[str]) -> bool:
+    return trial.run_id in receipt_ids or trial.low_sampling is True
+
+
+def _selected_latency(verified: Sequence[Trial]) -> tuple[str | None, Metric, Metric, str | None]:
+    """One scope per condition; group quantiles for packed/classical, request quantiles otherwise."""
+    if not verified:
+        return None, Metric(), Metric(), None
+    selected, unscoped = [], 0
+    for trial in verified:
+        scope = _trial_scope(trial)
+        if scope is None:
+            unscoped += 1
+        else:
+            selected.append((scope, trial))
+    scopes = sorted({scope for scope, _ in selected})
+    if len(scopes) > 1:
+        return None, Metric(), Metric(), "latency scopes differ across verified replicas (" + ", ".join(scopes) + "); not pooled"
+    if not scopes:
+        return None, Metric(), Metric(), "no verified replica exposes a usable latency scope"
+    scope = scopes[0]
+    if scope == "adapter request":
+        p50 = [_milliseconds(trial.latency_p50) for _, trial in selected]
+        p95 = [_milliseconds(trial.latency_p95) for _, trial in selected]
+    else:
+        # Group/envelope quantiles are one observation per submission envelope. The
+        # per-tweet latency field repeats that completion and is never pooled as if it
+        # were an independent request latency.
+        p50 = [_milliseconds(trial.group_latency_p50) for _, trial in selected]
+        p95 = [_milliseconds(trial.group_latency_p95) for _, trial in selected]
+    note = f"latency scope missing for {unscoped} verified replica(s)" if unscoped else None
+    return scope, _metric(p50), _metric(p95), note
+
+
+def build_conditions(trials: Sequence[Trial], plan: Mapping[str, Any] | None,
+                     receipt: Mapping[str, Any]) -> list[Condition]:
+    """Aggregate planned inference conditions from verified replicas only."""
+    low_ids = receipt_low_sampling(receipt)
+    requested = _count(_map(_map(plan).get("config")).get("repetitions")) if plan else None
+    planned_groups = _groups((trial for trial in trials if trial.in_scope and trial.kind == "inference"),
+                             lambda trial: (trial.model, trial.width))
+    conditions: list[Condition] = []
+    for (model, width), planned in sorted(
+            planned_groups.items(),
+            key=lambda item: (_display_name(item[0][0], plan).lower(), _width_order(item[0][1]))):
+        complete = [trial for trial in planned if trial.complete]
+        verified = [trial for trial in complete if trial.verification == VERIFIED]
+        energy = [trial for trial in verified
+                  if trial.energy_eligible and not _sampling_excluded(trial, low_ids)]
+        low_excluded = sum(1 for trial in verified
+                           if trial.energy_eligible and _sampling_excluded(trial, low_ids))
+        count_excluded = sum(1 for trial in verified if trial.gross is not None and not trial.energy_eligible)
+        no_energy = sum(1 for trial in verified if trial.gross is None)
+        scope, p50, p95, latency_note = _selected_latency(verified)
+        engine, adapter = _engine(model, planned, plan)
+        notes = [latency_note]
+        if low_excluded:
+            notes.append(f"{low_excluded} verified replica(s) excluded from energy for low sampling")
+        if count_excluded:
+            notes.append(f"{count_excluded} verified replica(s) excluded from energy for an incomplete submitted count")
+        if no_energy:
+            notes.append(f"{no_energy} verified replica(s) have no gross energy value")
+        conditions.append(Condition(
+            model=model, width=width, system=_display_name(model, plan), engine=engine, adapter=adapter,
+            passes=_passes(planned), requested_reps=requested, planned=len(planned), complete=len(complete),
+            verified=len(verified), energy_reps=len(energy), low_sampling_excluded=low_excluded,
+            count_shortfall_excluded=count_excluded, latency_scope=scope,
+            quality={name: _metric(getattr(trial, source) for trial in verified) for name, source in QUALITY_SOURCES},
+            energy={name: _metric(getattr(trial, source) for trial in energy) for name, source in ENERGY_SOURCES},
+            performance={
+                "throughput_tweets_s": _metric(trial.throughput for trial in verified),
+                "latency_p50_ms": p50,
+                "latency_p95_ms": p95,
+                "group_latency_p50_ms": _metric(_milliseconds(trial.group_latency_p50) for trial in verified),
+                "group_latency_p95_ms": _metric(_milliseconds(trial.group_latency_p95) for trial in verified),
+            },
+            note="; ".join(item for item in notes if item) or None,
+        ))
+    return conditions
+
+
+def _range(metric: Metric, digits: int = 4) -> str:
+    if metric.median is None:
+        return "—"
+    return f"{_sig(metric.median, digits)} [{_sig(metric.minimum, digits)}–{_sig(metric.maximum, digits)}]"
+
+
+def _metric_cells(metric: Metric) -> list[Any]:
+    return [metric.median, metric.minimum, metric.maximum, metric.n]
+
+
+def condition_csv(conditions: Sequence[Condition]) -> tuple[list[str], list[list[Any]]]:
+    """Tabular form of the same aggregation as the Markdown results table."""
+    headers = [
+        "model", "engine", "adapter", "width", "passes", "requested_reps",
+        "planned_reps", "complete_reps", "verified_reps", "energy_eligible_reps",
+        "low_sampling_excluded", "count_shortfall_excluded",
+    ]
+    for name in ("accuracy", "coverage", "macro_recall", "macro_f1"):
+        headers += [f"{name}_median", f"{name}_min", f"{name}_max", f"{name}_n"]
+    for name in ("gross_j_per_tweet", "device_idle_adjusted_j_per_tweet",
+                 "loaded_idle_adjusted_j_per_tweet"):
+        headers += [f"{name}_median", f"{name}_min", f"{name}_max", f"{name}_n"]
+    headers += ["throughput_tweets_s_median", "throughput_tweets_s_min",
+                "throughput_tweets_s_max", "throughput_tweets_s_n"]
+    headers += ["latency_scope", "latency_p50_ms_median", "latency_p50_ms_min",
+                "latency_p50_ms_max", "latency_p50_ms_n", "latency_p95_ms_median",
+                "latency_p95_ms_min", "latency_p95_ms_max", "latency_p95_ms_n"]
+    headers += ["group_latency_scope", "group_latency_p50_ms_median", "group_latency_p50_ms_min",
+                "group_latency_p50_ms_max", "group_latency_p50_ms_n", "group_latency_p95_ms_median",
+                "group_latency_p95_ms_min", "group_latency_p95_ms_max", "group_latency_p95_ms_n",
+                "notes"]
+    rows: list[list[Any]] = []
+    for condition in conditions:
+        row: list[Any] = [
+            condition.model, condition.engine, condition.adapter or "", _width_number(condition.width),
+            condition.passes, condition.requested_reps if condition.requested_reps is not None else "",
+            condition.planned, condition.complete, condition.verified, condition.energy_reps,
+            condition.low_sampling_excluded, condition.count_shortfall_excluded,
+        ]
+        for name, _ in QUALITY_SOURCES:
+            row += _metric_cells(condition.quality[name])
+        for name, _ in ENERGY_SOURCES:
+            row += _metric_cells(condition.energy[name])
+        row += _metric_cells(condition.performance["throughput_tweets_s"])
+        row += [condition.latency_scope or ""]
+        row += _metric_cells(condition.performance["latency_p50_ms"])
+        row += _metric_cells(condition.performance["latency_p95_ms"])
+        row += ["submission envelope completion"]
+        row += _metric_cells(condition.performance["group_latency_p50_ms"])
+        row += _metric_cells(condition.performance["group_latency_p95_ms"])
+        row += [condition.note or ""]
+        rows.append(row)
+    return headers, rows
+
+
+def write_condition_csv(path: Path, conditions: Sequence[Condition]) -> Path:
+    headers, rows = condition_csv(conditions)
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, lineterminator="\n")
+    writer.writerow(headers)
+    for row in rows:
+        writer.writerow(["" if value is None else value for value in row])
+    temporary = path.with_name(f".{path.name}.tmp")
+    temporary.write_text(buffer.getvalue(), encoding="utf-8")
+    temporary.replace(path)
+    return path
+
+
+def _throughput(value: float | None) -> str:
+    if value is None:
+        return "—"
+    if value == 0:
+        return "0"
+    return _sig(value, 3) if abs(value) < 0.05 else f"{value:,.1f}"
+
+
+def _results_table(conditions: Sequence[Condition]) -> list[str]:
+    rows = []
+    for condition in conditions:
+        rows.append((
+            condition.system, _width_cell(condition.width),
+            _sig(condition.quality["macro_recall"].median, 3),
+            _sig(condition.quality["macro_f1"].median, 3),
+            _range(condition.energy["gross_j_per_tweet"], 4),
+            _throughput(condition.performance["throughput_tweets_s"].median),
+            _sig(condition.performance["latency_p95_ms"].median, 4),
+            LATENCY_SCOPE_LABELS.get(condition.latency_scope, "—"),
+            condition.planned, condition.verified, condition.energy_reps,
+        ))
+    return _table(("System", "Width", "Macro recall", "Macro-F1", "Gross J/tweet [min–max]",
+                   "Tweets/s", "p95 ms", "p95 scope", "Planned", "Verified", "Energy-eligible"), rows)
+
+
+def _results_notes(conditions: Sequence[Condition], results_csv: Path | None) -> list[str]:
+    lines = []
+    if results_csv is not None:
+        lines += [f"Machine-readable table: `{results_csv}`.", ""]
+    lines.append("- A condition is one model and one submission width. Planned, Verified, and Energy-eligible "
+                 "count planned, receipt-verified, and energy-eligible inference replicas (trials, not tweets); "
+                 "a width is never pooled with another width.")
+    lines.append("- Quality uses the first measured pass only (`basis_pass = 0`); medians are across replicas, not tweets.")
+    observed = [condition.quality["coverage"] for condition in conditions if condition.quality["coverage"].n]
+    n_coverage = sum(metric.n for metric in observed)
+    n_verified = sum(condition.verified for condition in conditions)
+    if n_coverage:
+        lo = min(metric.minimum for metric in observed)
+        hi = max(metric.maximum for metric in observed)
+        coverage = f"{lo:.1%}" if lo == hi else f"{lo:.1%}–{hi:.1%}"
+        lines.append(f"- First-pass valid-output coverage: {coverage} "
+                     f"({n_coverage}/{n_verified} verified inference trials with coverage recorded).")
+    lines.append("- Gross J/tweet = CodeCarbon CPU + GPU + RAM energy / all submitted tweet decisions. "
+                 "Device- and loaded-idle-adjusted J/tweet are separate signed estimates in the CSV.")
+    lines.append("- Tweets/s = completed tweets / measured work-window seconds. p95 (and p50 in the CSV) select "
+                 "adapter-request quantiles for vLLM and QEV width 1, and one group/envelope observation for "
+                 "classical static groups and packed QEV widths > 1; packed envelope time is never repeated per "
+                 "tweet, and a column never mixes scopes.")
+    lines.append("- Energy-eligible needs a full submitted count and a passing sampling gate. Low-sampling and "
+                 "sample-shortfall replicas are excluded only from energy; accuracy uses the quality subset, p50 "
+                 "the performance subset, and adjusted energy the energy subset, so `*_n` can differ by column.")
+    unverified = sum(condition.complete - condition.verified for condition in conditions)
+    if unverified:
+        lines.append(f"- Complete in-scope inference replicas not verified and excluded from every median: {unverified}.")
+    for condition in conditions:
+        if condition.note:
+            lines.append("- " + _cell(f"{condition.system} width {_width_cell(condition.width)}: {condition.note}") + ".")
+    return lines
+
+
+# ---------------------------------------------------------------------------
 # Markdown summary
 
 
 def render_summary(root: Path, launcher: Mapping[str, Any], plan: Mapping[str, Any] | None,
                    plan_error: str | None, receipt: Mapping[str, Any], trials: Sequence[Trial],
-                   scope_note: str, csv_paths: Sequence[Path], summary_path: Path) -> str:
+                   scope_note: str, csv_paths: Sequence[Path], summary_path: Path,
+                   conditions: Sequence[Condition] = (), results_csv: Path | None = None) -> str:
     in_scope = [trial for trial in trials if trial.in_scope]
     mode = launcher.get("mode")
     overall, overall_detail = verification_state(receipt, trials)
@@ -320,6 +718,21 @@ def render_summary(root: Path, launcher: Mapping[str, Any], plan: Mapping[str, A
     else:
         lines.append("- Excluded: none recorded.")
     lines += [f"- {scope_note}", f"- In scope: {len(in_scope)} trial(s).", ""]
+
+    if mode != "mini":
+        lines += ["## Results (inference conditions)", ""]
+        if plan is None:
+            lines.append("Condition medians omitted: the run is unmeasured (no plan).")
+        elif mode != "full":
+            lines.append("Condition medians omitted: mode is not confirmed `full`.")
+        elif not conditions:
+            lines.append("Condition medians suppressed: the plan contains no in-scope inference condition.")
+        else:
+            lines += _results_table(conditions) + [""]
+            lines += _results_notes(conditions, results_csv)
+            if not any(condition.verified for condition in conditions):
+                lines.append("No condition has a receipt-verified complete inference replica; every metric is missing (`—`), not zero.")
+        lines.append("")
 
     lines += ["## Status", ""]
     counts = _counts(in_scope)
@@ -366,65 +779,32 @@ def render_summary(root: Path, launcher: Mapping[str, Any], plan: Mapping[str, A
             lines.append(f"- … and {len(attention) - 10} more.")
     lines.append("")
 
-    lines += ["## Energy", ""]
-    if plan is None:
-        lines.append("Energy medians omitted: the run is unmeasured (no plan).")
-    elif mode == "mini":
-        lines.append("**SMOKE ONLY:** mini runs do not report comparative energy medians. `energy_components.csv` and `energy_intensity.csv` are raw audit tables only.")
-    elif mode != "full":
-        lines.append("Energy medians omitted: mode is not confirmed `full`.")
-    else:
-        eligible = [trial for trial in in_scope if trial.kind == "inference" and trial.energy_eligible]
-        verified = [trial for trial in eligible if trial.verification == VERIFIED]
-        if not verified:
-            lines.append("Energy medians suppressed: no eligible inference run is explicitly verified by the receipt.")
-            if eligible:
-                lines.append(f"{len(eligible)} eligible inference run(s) excluded because they are unverified.")
-        else:
-            for (model, width), group in sorted(_groups(verified, lambda t: (t.model, str(t.width))).items()):
-                values = [trial.gross for trial in group if trial.gross is not None]
-                lines.append(f"- {model} width {width}: n={len(group)} verified replica(s); median {_fmt(_median(values))} J/tweet (min {_fmt(min(values))}, max {_fmt(max(values))}).")
-            lines += ["", "Median is over verified eligible full inference runs (a measured run is the energy", "replicate). Calibration, training, invalid, incomplete, sample-shortfall, and", "unverified runs are excluded; widths are separate conditions and never pooled."]
-            if len(eligible) > len(verified):
-                lines.append(f"Excluded as unverified: {len(eligible) - len(verified)} eligible inference run(s).")
-    lines.append("")
-
-    lines += ["## Quality (first pass)", ""]
-    complete_inference = [trial for trial in in_scope if trial.kind == "inference" and trial.complete]
-    if plan is None:
-        lines.append("Quality medians omitted: the run is unmeasured (no plan).")
-    elif mode == "mini":
+    if mode == "mini":
+        lines += ["## Smoke-only audit (mini)", ""]
+        complete_inference = [trial for trial in in_scope if trial.kind == "inference" and trial.complete]
+        lines += ["**SMOKE ONLY:** mini runs do not report comparative energy medians. `energy_components.csv` and `energy_intensity.csv` are raw audit tables only.", ""]
         rows = []
         for (model, width), group in sorted(_groups(complete_inference, lambda t: (t.model, str(t.width))).items()):
             metrics = sum(1 for trial in group if None not in (trial.recall, trial.f1, trial.accuracy, trial.coverage))
             rows.append((model, width, len(group), _ratio(metrics, len(group)), sum(1 for trial in group if trial.verification == VERIFIED)))
         lines += ["**SMOKE ONLY:** comparative quality medians are intentionally omitted.", ""]
         lines += _table(("Model", "Width", "Complete runs", "Quality fields", "Verified"), rows)
-        lines += ["", "Only metric availability/coverage is shown; raw values remain in the smoke-only CSV audit tables."]
-    elif mode != "full":
-        lines.append("Quality medians omitted: mode is not confirmed `full`.")
-    else:
-        verified = [trial for trial in complete_inference if trial.verification == VERIFIED]
-        if not verified:
-            lines.append("Quality medians suppressed: no complete inference run is explicitly verified by the receipt.")
-            if complete_inference:
-                lines.append(f"{len(complete_inference)} complete inference run(s) excluded because they are unverified.")
-        else:
-            rows = []
-            for (model, width), group in sorted(_groups(verified, lambda t: (t.model, str(t.width))).items()):
-                metrics = sum(1 for trial in group if None not in (trial.recall, trial.f1, trial.accuracy, trial.coverage))
-                rows.append((model, width, len(group), _ratio(metrics, len(group)), _fmt(_median(t.recall for t in group)),
-                             _fmt(_median(t.f1 for t in group)), _fmt(_median(t.accuracy for t in group)), _fmt(_median(t.coverage for t in group))))
-            lines += _table(("Model", "Width", "Verified runs", "Quality fields", "Macro recall", "Macro-F1", "Accuracy", "Coverage"), rows)
-            lines += ["", "First-pass quality only; later passes diagnose repeat disagreement. `Quality fields`", "is the fraction of verified runs containing all four quality fields. Missing values", "stay missing, never zero. Only explicitly verified run ids with matching active", "attempts enter these medians."]
-            if len(complete_inference) > len(verified):
-                lines.append(f"Excluded as unverified: {len(complete_inference) - len(verified)} complete inference run(s).")
-    lines.append("")
+        lines += ["", "Only metric availability/coverage is shown; raw values remain in the smoke-only CSV audit tables.",
+                  "No `inference_medians.csv` is written for a mini run."]
+        lines.append("")
 
     lines += ["## Outputs", ""]
     lines.append(f"- Summary: `{summary_path}`")
-    lines += [f"- Table: `{path}`" for path in csv_paths]
-    lines += ["", "CSV tables are standard `analysis.py` outputs and retain incomplete/unverified rows;", "they are audit tables, not evidence that every row is a valid verified result."]
+    audit_paths = [path for path in csv_paths if path.name != "inference_medians.csv"]
+    lines.append("- Standard `analysis.py` audit tables:")
+    lines += [f"  - `{path}`" for path in audit_paths]
+    if results_csv is not None:
+        lines.append(f"- Condition medians (verified inference): `{results_csv}`")
+    lines += ["", "Standard CSV tables retain incomplete/unverified rows; they are audit tables, not",
+              "evidence that every row is a valid verified result."]
+    if results_csv is not None:
+        lines.append("`inference_medians.csv` uses only receipt-verified complete inference replicas;"
+                     " an empty field means missing, never zero.")
     if mode == "mini":
         lines.append("For this `mini` root all CSV tables are smoke-only.")
     lines.append("")
@@ -449,16 +829,23 @@ def generate_report(root: str | Path) -> dict[str, Any]:
     report_dir = root_path / "report"
     report_dir.mkdir(parents=True, exist_ok=True)
     csv_paths = tuple(write_tables(tables, report_dir))
+    conditions = build_conditions(trials, plan, receipt)
+    results_csv = None
+    if launcher.get("mode") == "full" and plan is not None and conditions:
+        results_csv = write_condition_csv(report_dir / "inference_medians.csv", conditions)
+        csv_paths += (results_csv,)
     summary_path = report_dir / "summary.md"
     temporary = summary_path.with_name(f".{summary_path.name}.tmp")
-    temporary.write_text(render_summary(root_path, launcher, plan, plan_error, receipt, trials, scope_note, csv_paths, summary_path), encoding="utf-8")
+    temporary.write_text(render_summary(root_path, launcher, plan, plan_error, receipt, trials, scope_note,
+                                        csv_paths, summary_path, conditions, results_csv), encoding="utf-8")
     temporary.replace(summary_path)
     return {"root": root_path, "launcher": launcher, "plan": plan, "plan_error": plan_error, "verification": receipt,
-            "trials": trials, "summary_path": summary_path, "csv_paths": csv_paths}
+            "trials": trials, "conditions": conditions, "results_csv": results_csv,
+            "summary_path": summary_path, "csv_paths": csv_paths}
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Write RUN_ROOT/report/summary.md and analysis CSVs.")
+    parser = argparse.ArgumentParser(description="Write RUN_ROOT/report/summary.md, inference_medians.csv, and analysis CSVs.")
     parser.add_argument("run_root", type=Path)
     return parser
 

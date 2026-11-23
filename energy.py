@@ -164,7 +164,10 @@ class Meter:
         self._events = None
         self._closed = False
         self._used = False
-        self._spawn(list(worker) if worker is not None else meter_worker.default_command())
+        # Opt in from the parent so an already-running benchmark keeps the
+        # original export behavior even when it starts a fresh worker.
+        command = [*meter_worker.default_command(), "--export-tracking-modes"] if worker is None else list(worker)
+        self._spawn(command)
         try:
             ready = self._await("ready", "prepare")
             self.metadata = ready["metadata"]

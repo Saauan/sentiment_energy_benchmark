@@ -169,7 +169,8 @@ config digest), `resolved.json` (the frozen configuration; resume requires it
 unchanged), `plan.json` and one directory per trial with `attempt-NNNN/` (result,
 predictions, CodeCarbon CSV, native BoAmps JSON, QEV receipts, logs), `readiness/`,
 `verification.json`, `launcher-logs/invocation-NNNN/*.json`, and
-`report/summary.md` plus `report/*.csv`.
+`report/summary.md` plus `report/*.csv` — six standard per-trial analysis tables
+and, for `full`, the condition-level `report/inference_medians.csv`.
 
 Excluded models are not attempted: report them as such, never as zero energy, a
 failed measurement, or evidence about a model. The download estimate counts a
@@ -178,6 +179,32 @@ their manifest sizes; otherwise it counts the full shard sum, and the disk
 requirement adds the 5% margin of `setup/gpu/fetch_models.sh`. It excludes Python,
 packages, and model metadata. Approve only after checking that the selection fits:
 nothing is silently quantized, offloaded, or substituted.
+
+#### Reading a full-run report
+
+For `full`, `report/summary.md` includes one results row per planned model and
+width. It shows first-pass macro recall and macro-F1, gross J/submitted tweet
+as median `[min–max]`, completed tweets/s, and p95 latency with its scope. It
+also shows planned, verified, and energy-eligible trial counts, and reports
+observed first-pass valid-output coverage below the table when available.
+Medians use verified completed inference trials, not individual tweets or
+passes. Widths are never pooled, and missing values stay `—`.
+
+`report/inference_medians.csv` adds accuracy, coverage, p50 latency,
+device-idle- and loaded-idle-adjusted J/tweet, and the number of contributing
+trials for each metric. Trials with incomplete submission counts or
+insufficient energy samples do not enter energy medians. The six standard
+analysis CSVs remain separate audit tables and can contain unverified rows.
+
+p95 is reported with its scope because the observation unit differs: single
+adapter requests and independent vLLM HTTP requests are per-request
+observations, while classical CPU systems and packed QEV report one closed-loop
+group completion per group. Packed QEV envelopes carry no per-tweet latency, so
+their p95 is the envelope/group p95 only; see
+[DESIGN.md §6.2](DESIGN.md#62-latency-and-throughput).
+
+`mini` reports no condition aggregates: its summary shows only metric
+availability, and its CSVs stay smoke-only audit output.
 
 #### Later and reporting
 
@@ -192,8 +219,9 @@ Resume is same-host only and requires the unchanged `resolved.json`. Completed
 trials are reused; failed or skipped trials are retried only with an explicit
 `--retry-failed` or `--retry-skipped`, in fresh attempts, without changing the
 condition. `launcher_report.py` reads artifacts, never measures, and writes only
-inside `report/`; `analysis.py` and the notebook remain available for tables and
-figures.
+inside `report/`, where `summary.md` is the condition-level view for `full` and
+`inference_medians.csv` is its CSV form; `analysis.py` and the notebook remain
+available for tables and figures.
 
 Exit status: `0` successful (including a preview or cancellation), `1` readiness
 failed or the run is not fully complete and verified, `2` configuration, setup,
@@ -329,10 +357,14 @@ required.
 
 Each phase is a separate analysis root. Its `plan.json`, run states, attempt
 histories, predictions, CodeCarbon CSV, monitoring metadata, logs, and native
-BoAmps JSON form the audit trail. Analysis reads only the active attempt's
+BoAmps JSON form the audit trail. New BoAmps exports name the actual energy
+backends where known (e.g., `cpuTrackingMode: cpu_load`, `gpuTrackingMode: nvml`).
+Historical exports are not rewritten. Analysis reads only the active attempt's
 `result.json`; earlier attempts remain available for failure auditing.
 
-Print trial summaries or export six tidy CSV tables:
+Print trial summaries or export six tidy per-trial CSV tables. For a
+launcher-owned root, `launcher_report.py` adds the condition summary table and
+`inference_medians.csv` described above; those never replace these audit tables.
 
 ```bash
 .venv/bin/python analysis.py artifacts/full_engine_session_01

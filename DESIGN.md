@@ -431,9 +431,15 @@ For the width comparisons at 1, 16, and 64:
 
 ## 7. Native BoAmps export and verification
 
-Every trial emits CodeCarbon CSV and native BoAmps JSON. Metadata identifies
+Every trial emits CodeCarbon CSV and BoAmps JSON. Metadata identifies
 stage/task family, actual request count, a nonempty algorithm array, and a
-nonempty dataset array with usage/type and source.
+nonempty dataset array with usage/type and source. For new exports the runner
+uses CodeCarbon 3.3.3's BoAmps mapper and fills `cpuTrackingMode` and
+`gpuTrackingMode` from the initialized meter's `monitoring.json` source records.
+For example, the CPU may use `rapl`, `cpu_load`, or `constant`, and the GPU may
+use `nvml`. An absent, unknown, or mixed GPU backend is omitted. These fields
+describe how energy was tracked, not the machine/process scope. Historical
+reports may omit them and are not rewritten.
 
 Request-count rules:
 
