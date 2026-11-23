@@ -64,6 +64,20 @@ def test_create_rejects_unpinned_or_unknown_models(tmp_path):
         qev_local.create({"adapter": "vllm"}, tmp_path)
 
 
+@pytest.mark.parametrize("repo", list(qev_local.MODEL_SETUP))
+def test_packed_is_explicit_opt_in_for_every_pinned_model(tmp_path, repo):
+    adapter = qev_local.create(spec_for(repo=repo, params={"request_mode": "packed"}), tmp_path)
+    assert adapter.supported_batches == (1, 4, 16, 64, 256)
+    assert adapter.request_mode == "packed"
+    assert adapter.compute_process_id is None
+    with pytest.raises(Unavailable, match="pinned"):
+        qev_local.create(spec_for(repo=repo, revision="main", params={"request_mode": "packed"}), tmp_path)
+    with pytest.raises(Unavailable, match="unpinned"):
+        qev_local.QEVLocalAdapter(spec_for(repo=repo, revision="main", params={"request_mode": "packed"}),
+                                  tmp_path, qev_local.MODEL_SETUP[repo])
+    adapter.close()
+
+
 def test_setup_requires_pinned_local_snapshot_before_spawn(tmp_path, monkeypatch):
     def forbidden_spawn(*args, **kwargs):
         raise AssertionError("missing snapshot must fail before spawn")
@@ -209,6 +223,7 @@ def test_fake_qev_subprocess_setup_predict_and_bounded_close(tmp_path, monkeypat
 
     process = adapter._process
     assert process is not None and process.poll() is None
+    assert adapter.compute_process_id == process.pid == metadata["worker_pid"]
     prediction = adapter.predict(["a happy tweet"])[0]
     assert prediction["label"] == "positive"
     assert prediction["raw"]["runtime"] == {"prompt_version": "fake-qev", "debias": 1, "debug": False}
@@ -217,6 +232,7 @@ def test_fake_qev_subprocess_setup_predict_and_bounded_close(tmp_path, monkeypat
     adapter.close()
     assert process.poll() is not None
     assert adapter._process is None
+    assert adapter.compute_process_id is None
     adapter.close()  # idempotent
 
 

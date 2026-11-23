@@ -1,8 +1,9 @@
 """Lazy, offline adapter for Baseten decision models served by patched OneJev QEV.
 
-Only batch size one is advertised: QEV batches question branches from one state,
-not independent tweets. Model loading and all QEV/Transformers imports happen in
-a dedicated worker during :meth:`QEVLocalAdapter.setup`, never at module import
+Single mode advertises only batch size one. Opt-in packed mode supports multiple
+numbered tweets in one shared state with targeted questions; it is not batching
+independent states. Model loading and all QEV/Transformers imports happen in a
+dedicated worker during :meth:`QEVLocalAdapter.setup`, never at module import
 or adapter construction.
 """
 from __future__ import annotations
@@ -101,6 +102,8 @@ class QEVLocalAdapter:
         self.repo = spec["repo"]
         self.revision = spec["revision"]
         self.model_setup = setup
+        if MODEL_SETUP.get(self.repo) != setup or self.revision != setup.revision:
+            raise Unavailable(f"unsupported or unpinned QEV decision model: {self.repo!r}")
         self.local_snapshot = spec.get("local_snapshot")
         self.attempt = Path(attempt)
         self.params = dict(spec.get("params") or {})
@@ -110,8 +113,6 @@ class QEVLocalAdapter:
         self.request_mode = self.params.get("request_mode", "single")
         if self.request_mode not in {"single", "packed"}:
             raise ValueError("params['request_mode'] must be 'single' or 'packed'")
-        if self.request_mode == "packed" and self.repo != "baselabs/joey-1":
-            raise Unavailable("packed mode is only enabled for Joey-1")
         self.supported_batches = (1, 4, 16, 64, 256) if self.request_mode == "packed" else (1,)
         self.debias = self.params.get("debias", 1)
         if isinstance(self.debias, bool) or not isinstance(self.debias, int) or self.debias < 1:
@@ -131,6 +132,15 @@ class QEVLocalAdapter:
         self._lock = threading.RLock()
         self._closed = False
         self._atexit_registered = False
+
+    @property
+    def compute_process_id(self) -> int | None:
+        """PID of the live, owned QEV worker, or ``None`` when not running."""
+        with self._lock:
+            process = self._process
+            if process is None or process.poll() is not None:
+                return None
+            return int(process.pid)
 
     def _engine_options(self) -> dict[str, Any]:
         options = {key: self.params[key] for key in _ENGINE_KEYS if key in self.params}
@@ -234,6 +244,7 @@ class QEVLocalAdapter:
                 )
                 metadata = {
                     "adapter": "qev",
+                    "worker_pid": self.compute_process_id,
                     "repo": self.repo,
                     "revision": self.revision,
                     "onejev_revision": ONEJEV_REVISION,

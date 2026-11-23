@@ -35,7 +35,7 @@ def config(adapter="svm", *, batches=(1,), training=True, passes=None):
     if adapter == "qev":
         per_width = {"1": 2} if 1 in batches else {}
     return {
-        "phase": "synthetic", "dataset": {"adapter": "line_pairs", "path": "unused"},
+        "phase": "synthetic", "execution_protocol": "engine-session-v1", "dataset": {"adapter": "line_pairs", "path": "unused"},
         "models": {model: {"adapter": adapter, "device": "cuda" if adapter in {"qev", "vllm"} else "cpu", "params": {}}},
         "batch_sizes": list(batches), "seed": 1729, "sample_size": 3,
         "warmup_rows": 1, "repetitions": 1, "passes": {model: per_width},
@@ -66,6 +66,10 @@ class FakeAdapter:
         labels = {"bad": "negative", "good": "positive", "ordinary": "neutral", "warm": "neutral"}
         return [{"label": labels.get(text, "neutral"), "raw": {"text": text}, "latency_s": 0.001}
                 for text in texts]
+
+    def set_submission_width(self, width):
+        self.width = width
+        return {"submission_width": width, "server_restarted": False}
 
     def close(self):
         self.closed = True
@@ -365,6 +369,187 @@ class BenchmarkTests(unittest.TestCase):
         self.assertEqual([t["kind"] for t in selected], ["device_idle", "training", "inference"])
         limited = benchmark.select_trials(plan, self.root, kind="inference", limit_new=2)
         self.assertEqual([t["kind"] for t in limited], ["device_idle", "training"])
+
+    def test_sessions_share_one_engine_across_widths_and_repetitions(self):
+        cfg = config("vllm", batches=(1, 4, 16), training=False, passes=1)
+        cfg["repetitions"] = 2
+        plan = self.plan(cfg)
+        self.assertEqual(plan["format_version"], 2)
+        self.assertEqual(plan, benchmark.build_plan(cfg, dataset_info(), len(TRAIN)))
+        self.assertEqual([s["rep"] for s in plan["sessions"]], [0, 1])
+        adapters, specs = [], []
+        def create(spec, path):
+            specs.append(spec)
+            adapter = FakeAdapter()
+            adapter.widths = []
+            adapter.set_submission_width = lambda width: (adapter.widths.append(width) or {"submission_width": width, "server_restarted": False})
+            adapters.append(adapter)
+            return adapter
+        with mock.patch.object(benchmark, "_create_adapter", side_effect=create):
+            self.run_all(cfg, plan)
+        self.assertEqual(len(adapters), 2)
+        self.assertEqual([a.setup_calls for a in adapters], [1, 1])
+        self.assertTrue(all(a.closed for a in adapters))
+        self.assertEqual([a.widths for a in adapters], [s["widths"] for s in plan["sessions"]])
+        self.assertEqual([s["submission_width"] for s in specs], [16, 16])
+        for session in plan["sessions"]:
+            ts = [t for t in plan["trials"] if t["session_id"] == session["session_id"]]
+            idle = next(t for t in ts if t["kind"] == "device_idle")
+            self.assertEqual(idle["batch_size"], 0)
+            self.assertTrue(all(t["device_idle_run_id"] == idle["run_id"] for t in ts if t is not idle))
+            self.assertEqual(len([t for t in ts if t["kind"] == "inference"]), 3)
+        report = benchmark.verify_plan(self.root, plan, self.data(cfg))
+        self.assertTrue(report["ok"], report["inconsistencies"])
+
+    def test_seeded_order_is_deterministic_and_rep_major(self):
+        cfg = config("vllm", batches=(1, 4, 16, 64, 256), training=False, passes=1)
+        cfg["models"]["another"] = dict(cfg["models"]["model"])
+        cfg["passes"]["another"] = dict(cfg["passes"]["model"])
+        cfg["repetitions"] = 3
+        plan = benchmark.build_plan(cfg, dataset_info(), len(TRAIN))
+        self.assertEqual(plan, benchmark.build_plan(cfg, dataset_info(), len(TRAIN)))
+        self.assertEqual([s["rep"] for s in plan["sessions"]], [0, 0, 1, 1, 2, 2])
+        self.assertTrue(all(set(s["widths"]) == set(cfg["batch_sizes"]) for s in plan["sessions"]))
+        other = {**cfg, "seed": cfg["seed"] + 1}
+        other_plan = benchmark.build_plan(other, dataset_info(), len(TRAIN))
+        self.assertNotEqual([s["widths"] for s in plan["sessions"]], [s["widths"] for s in other_plan["sessions"]])
+
+    def test_training_once_for_all_widths_and_in_each_repetition(self):
+        cfg = config("svm", batches=(1, 4, 16), training=True, passes=1)
+        cfg["repetitions"] = 2
+        plan = self.plan(cfg)
+        adapters = []
+        def create(spec, path):
+            adapters.append(FakeAdapter())
+            return adapters[-1]
+        with mock.patch.object(benchmark, "_create_adapter", side_effect=create):
+            self.run_all(cfg, plan)
+        self.assertEqual(len(adapters), 2)
+        self.assertEqual([a.setup_calls for a in adapters], [1, 1])
+        self.assertEqual(sum(t["kind"] == "training" for t in plan["trials"]), 2)
+        report = benchmark.verify_plan(self.root, plan, self.data(cfg))
+        self.assertTrue(report["ok"], report["inconsistencies"])
+
+    def test_partial_loaded_baseline_resumes_once_and_preserves_bytes(self):
+        cfg = config("vllm", batches=(1, 4, 16), training=False, passes=1)
+        plan = self.plan(cfg)
+        selected = benchmark.select_trials(plan, self.root, limit_new=2)
+        self.assertEqual([t["kind"] for t in selected], ["device_idle", "loaded_idle"])
+        first = FakeAdapter()
+        with mock.patch.object(benchmark, "_create_adapter", return_value=first):
+            benchmark.run_selected(self.root, plan, selected, self.data(cfg))
+        saved = {t["run_id"]: (self.root / t["run_id"] / "attempt-0001" / "result.json").read_bytes() for t in selected}
+        second = FakeAdapter()
+        with mock.patch.object(benchmark, "_create_adapter", return_value=second) as create:
+            self.run_all(cfg, plan)
+        self.assertEqual(create.call_count, 1)
+        self.assertEqual(second.setup_calls, 1)
+        for t in selected:
+            self.assertEqual(saved[t["run_id"]], (self.root / t["run_id"] / "attempt-0001" / "result.json").read_bytes())
+            self.assertFalse((self.root / t["run_id"] / "attempt-0002").exists())
+        inf = next(t for t in plan["trials"] if t["kind"] == "inference" and t["batch_size"] == selected[1]["batch_size"])
+        result = storage.load(self.root / inf["run_id"] / "attempt-0001" / "result.json")
+        self.assertEqual(result["adapter"]["engine_session"]["segment_id"], "segment-0002")
+        self.assertEqual(result["adapter"]["loaded_idle_engine_session"]["segment_id"], "segment-0001")
+        for t in plan["trials"]:
+            if t["kind"] == "inference":
+                result = storage.load(self.root / t["run_id"] / "attempt-0001" / "result.json")
+                self.assertEqual(result["adapter"]["engine_session"]["segment_id"], "segment-0002")
+        report = benchmark.verify_plan(self.root, plan, self.data(cfg))
+        self.assertTrue(report["ok"], report["inconsistencies"])
+
+    def test_historical_plans_cannot_execute_even_directly(self):
+        cfg = config()
+        del cfg["execution_protocol"]
+        plan = self.plan(cfg)
+        self.assertEqual(plan["format_version"], 1)
+        with mock.patch.object(benchmark, "_create_adapter") as create:
+            with self.assertRaisesRegex(ValueError, "read/verify only"):
+                self.run_all(cfg, plan)
+            create.assert_not_called()
+        self.assertTrue(benchmark.verify_plan(self.root, plan, self.data(cfg))["ok"])
+
+    def test_qev_context_rejection_is_width_local_and_engine_reused(self):
+        cfg = config("qev", batches=(1, 4), training=False, passes=1)
+        cfg["models"]["model"]["params"]["request_mode"] = "packed"
+        cfg["passes"]["model"] = {"1": 1, "4": 1}
+        # Arrange the rejected width first, proving the healthy engine continues.
+        while True:
+            plan = benchmark.build_plan(cfg, dataset_info(), len(TRAIN))
+            if plan["sessions"][0]["widths"][0] == 4:
+                break
+            cfg["seed"] += 1
+        plan = self.plan(cfg)
+        adapter = FakeAdapter()
+        def context(texts):
+            if len(texts) > 1:
+                exc = Unavailable("too long")
+                exc.context_receipt = {"fit": False}
+                raise exc
+            return {"width": len(texts), "fit": True, "model_forwarding": False}
+        adapter.check_context = context
+        original_predict = adapter.predict
+        def pack(texts):
+            rows = original_predict(texts)
+            ids = ["sentiment"] if len(rows) == 1 else [f"sentiment_{i+1}" for i in range(len(rows))]
+            for i, (row, qid) in enumerate(zip(rows, ids, strict=True)):
+                row["raw"].update(request_width=len(rows), target_number=i + 1, question_id=qid)
+            rows[0]["raw"]["request"] = {"width": len(rows), "question_ids": ids}
+            return rows
+        adapter.predict = pack
+        with mock.patch.object(benchmark, "_create_adapter", return_value=adapter) as create:
+            self.run_all(cfg, plan)
+        self.assertEqual(create.call_count, 1)
+        self.assertEqual(adapter.setup_calls, 1)
+        self.assertTrue(adapter.closed)
+        for t in plan["trials"]:
+            if t["batch_size"] == 4:
+                self.assertEqual(benchmark._state_status(self.root, t), "skipped")
+            elif t["batch_size"] == 1:
+                self.assertEqual(benchmark._state_status(self.root, t), "complete")
+        report = benchmark.verify_plan(self.root, plan, self.data(cfg))
+        self.assertTrue(report["ok"], report["inconsistencies"])
+
+    def test_engine_failure_stops_remaining_widths(self):
+        cfg = config("vllm", batches=(1, 4, 16), training=False, passes=1)
+        plan = self.plan(cfg)
+        adapter = FakeAdapter(predict_error=RuntimeError("engine disconnected"))
+        with mock.patch.object(benchmark, "_create_adapter", return_value=adapter) as create:
+            self.run_all(cfg, plan)
+        self.assertEqual(create.call_count, 1)
+        self.assertTrue(adapter.closed)
+        self.assertEqual(adapter.setup_calls, 1)
+        remaining = [t for t in plan["trials"] if t["kind"] == "inference"]
+        self.assertTrue(all(benchmark._state_status(self.root, t) in {"failed", "skipped"} for t in remaining))
+        self.assertEqual(sum(benchmark._state_status(self.root, t) == "failed" for t in remaining), 1)
+
+    def test_gpu_process_filter_accepts_only_owned_process_group(self):
+        self.host["gpu_compute_apps"] = "300, owned child, 20 MiB"
+        adapter = FakeAdapter()
+        adapter.compute_process_id = 200
+        with mock.patch.object(benchmark.os, "getpgid", return_value=200):
+            self.assertEqual(benchmark._owned_snapshot(adapter)["gpu_compute_apps"], self.host["gpu_compute_apps"])
+        with mock.patch.object(benchmark.os, "getpgid", return_value=201):
+            with self.assertRaisesRegex(Unavailable, "foreign GPU"):
+                benchmark._owned_snapshot(adapter)
+        self.host.update(gpu=[{"uuid": "GPU-1"}], gpu_compute_apps=None)
+        with self.assertRaisesRegex(Unavailable, "query failed"):
+            benchmark._owned_snapshot(adapter)
+
+    def test_post_window_competing_compute_prevents_publication(self):
+        cfg = config(training=False)
+        plan = self.plan(cfg)
+        capture = FakeMeter.capture
+        def contaminated(meter, work):
+            result = capture(meter, work)
+            if meter.task["taskStage"] == "inference":
+                self.host["gpu_compute_apps"] = "99999999, foreign, 100 MiB"
+            return result
+        with mock.patch.object(FakeMeter, "capture", contaminated), mock.patch.object(benchmark, "_create_adapter", return_value=FakeAdapter()):
+            self.run_all(cfg, plan)
+        inference = plan["trials"][-1]
+        self.assertEqual(benchmark._state_status(self.root, inference), "skipped")
+        self.assertFalse((self.root / inference["run_id"] / "attempt-0001" / "result.json").exists())
 
     def test_interpreter_paths_are_lexical_not_symlink_resolved(self):
         spec = {

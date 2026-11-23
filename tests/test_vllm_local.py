@@ -292,6 +292,85 @@ def test_runtime_spec_width_overrides_static_param(tmp_path, monkeypatch):
     adapter.close()
 
 
+def test_runtime_width_switch_preserves_startup_receipt_and_burst_order(tmp_path, monkeypatch):
+    adapter = offline_adapter(tmp_path, submission_width=256)
+    adapter._pid = adapter._process.pid
+    seen = []
+    monkeypatch.setattr(adapter, "_predict_group", lambda group: seen.append(list(group)) or list(group))
+    original_policy = dict(adapter._request_policy)
+    assert adapter.compute_process_id == adapter._pid
+
+    for width in (1, 4, 16, 64, 256, 4):
+        receipt = adapter.set_submission_width(width)
+        texts = [f"tweet-{i}" for i in range(width)]
+        assert adapter.predict(texts) == texts
+        assert seen[-1] == texts
+        assert receipt["submission_width"] == width
+        assert receipt["startup_max_submission_width"] == 256
+        assert receipt["scheduler_max_num_seqs"] == 16
+        assert receipt["max_queue_waves"] == _queue_waves(width)
+        assert receipt["server_pid"] == adapter._pid
+        assert receipt["server_restarted"] is False
+        json.dumps(receipt, allow_nan=False)
+    assert original_policy["submission_width"] is None
+    assert adapter._request_policy["submission_width"] == 4
+    assert adapter.predict(["tail-a", "tail-b"]) == ["tail-a", "tail-b"]
+    assert seen[-1] == ["tail-a", "tail-b"]
+    events = [json.loads(line) for line in (adapter.attempt / "vllm-adapter.jsonl").read_text().splitlines()]
+    assert [e["submission_width"] for e in events if e["event"] == "submission_width_set"] == [1, 4, 16, 64, 256, 4]
+    assert all(len(e["group_sizes"]) == 1 and e["submission_width_source"] == "runtime"
+               for e in events if e["event"] == "predict")
+
+
+@pytest.mark.parametrize("width", [0, 32, True, "4", 4.0, None])
+def test_runtime_width_rejects_invalid_without_mutating_state(tmp_path, width):
+    adapter = offline_adapter(tmp_path, submission_width=16)
+    policy = dict(adapter._request_policy)
+    with pytest.raises(Unavailable, match="submission_width must be one of"):
+        adapter.set_submission_width(width)
+    assert adapter._submission_width == 16
+    assert adapter._request_policy == policy
+
+
+def test_runtime_width_guards_lifecycle_budget_and_startup_max(tmp_path, monkeypatch):
+    adapter = offline_adapter(tmp_path, submission_width=16)
+    with pytest.raises(Unavailable, match="exceeds the startup maximum"):
+        adapter.set_submission_width(64)
+    monkeypatch.setattr(module.resource, "getrlimit", lambda *_: (65, 65))
+    with pytest.raises(Unavailable, match="RLIMIT_NOFILE"):
+        adapter.set_submission_width(4)
+    assert adapter._submission_width == 16
+    adapter._process.returncode = 1
+    assert adapter.compute_process_id is None
+    with pytest.raises(RuntimeError, match="live, set-up"):
+        adapter.set_submission_width(1)
+    adapter._process = None
+    with pytest.raises(RuntimeError, match="live, set-up"):
+        adapter.set_submission_width(1)
+
+
+def test_runtime_width_selection_waits_for_inflight_predict(tmp_path, monkeypatch):
+    adapter = offline_adapter(tmp_path, submission_width=16)
+    started = threading.Event()
+    release = threading.Event()
+    changed = threading.Event()
+    def group(texts):
+        started.set()
+        assert release.wait(timeout=5)
+        return texts
+    monkeypatch.setattr(adapter, "_predict_group", group)
+    predict = threading.Thread(target=lambda: adapter.predict(["one"]))
+    select = threading.Thread(target=lambda: (adapter.set_submission_width(4), changed.set()))
+    predict.start()
+    assert started.wait(timeout=5)
+    select.start()
+    assert not changed.wait(timeout=0.05)
+    release.set()
+    predict.join(timeout=5)
+    select.join(timeout=5)
+    assert changed.is_set() and adapter._submission_width == 4
+
+
 def test_setup_fails_fast_when_file_limit_blocks_the_burst(tmp_path, monkeypatch):
     called = []
     monkeypatch.setattr(module.resource, "getrlimit", lambda *_: (200, 200))

@@ -15,12 +15,23 @@ RAW_KEYS = {
     "repetitions", "passes", "energy", "device_idle_s", "loaded_idle_s",
     "loaded_idle_adapters", "measure_training", "settle_s",
 }
+PROTOCOL = configuration.EXECUTION_PROTOCOL
+LEGACY_PROFILE = configuration.ROOT / "profiles" / "legacy-experiment.json"
+FULL_ISOLATED_PROFILE = configuration.ROOT / "profiles" / "laptop-full-isolated-02.json"
+CPU_ISOLATED_PROFILE = configuration.ROOT / "profiles" / "laptop-cpu-isolated-02.json"
 WIDTH_PROFILE = configuration.ROOT / "profiles" / "laptop-gpu-widths.json"
 WIDE_WIDTHS = (1, 4, 16, 64, 256)
+ACTIVE_WIDTHS = [1, 16, 64]
+ALL_MODELS = ["qwen2b", "joey1", "qwen9b", "elephant1", "qwen27b", "mammoth1", "svm", "nb", "fasttext"]
+QEV_SIBLINGS = ("joey1", "elephant1", "mammoth1")
 
 
 def width_document():
     return load(WIDTH_PROFILE)
+
+
+def legacy_document():
+    return load(LEGACY_PROFILE)
 
 
 def document():
@@ -33,9 +44,68 @@ def write_document(tmp_path, value):
     return path
 
 
-def test_gpu_pilot_contract():
-    cfg = configuration.configure("gpu_pilot")
+def test_active_config_is_one_full_phase_with_the_engine_session_protocol():
+    active = document()
+    assert list(active["phases"]) == ["full"]
+    cfg = configuration.configure("full")
+    assert set(cfg) == RAW_KEYS | {"execution_protocol"}
+    assert cfg["execution_protocol"] == PROTOCOL == "engine-session-v1"
+    assert cfg["phase"] == "full"
+    assert (cfg["sample_size"], cfg["warmup_rows"], cfg["seed"], cfg["repetitions"]) == (257, 17, 1729, 3)
+    assert cfg["batch_sizes"] == ACTIVE_WIDTHS
+    # The active stage reuses the reported laptop full panel: isolated 0.2 s
+    # tracker cadence with five scheduled samples, not the pilot cadence.
+    assert cfg["energy"] == {"country_iso_code": "FRA", "gpu_ids": [0], "sample_secs": 0.2, "min_samples": 5}
+    assert (cfg["device_idle_s"], cfg["loaded_idle_s"], cfg["settle_s"]) == (8, 12, 5)
+    assert cfg["loaded_idle_adapters"] == ALL_MODELS
+    assert cfg["measure_training"] is True
+    # There is no second runnable phase: the legacy definitions live only in the
+    # archived profile, which is resolved for verification and refused by the runner.
+    with pytest.raises(ValueError, match="unknown phase"):
+        configuration.configure("gpu_pilot")
+    with pytest.raises(ValueError, match="unknown phase"):
+        configuration.configure("cpu_pilot")
+    with pytest.raises(ValueError, match="unknown phase"):
+        configuration.configure("gpu_widths")
+
+
+def test_full_contract_all_nine_widths_and_pass_targets():
+    cfg = configuration.configure("full")
+    assert list(cfg["models"]) == ALL_MODELS
+    assert cfg["passes"] == {
+        "qwen2b": {"1": 2, "16": 4, "64": 4},
+        "joey1": {"1": 1, "16": 4, "64": 4},
+        "qwen9b": {"1": 2, "16": 4, "64": 4},
+        "elephant1": {"1": 1, "16": 4, "64": 4},
+        "qwen27b": {"1": 2, "16": 4, "64": 4},
+        "mammoth1": {"1": 1, "16": 4, "64": 4},
+        "svm": {"1": 200, "16": 1200, "64": 1200},
+        "nb": {"1": 200, "16": 1200, "64": 1200},
+        "fasttext": {"1": 1750, "16": 1750, "64": 1750},
+    }
+    for model_id in ALL_MODELS:
+        assert set(cfg["passes"][model_id]) == {str(width) for width in ACTIVE_WIDTHS}
+        for count in cfg["passes"][model_id].values():
+            assert cfg["sample_size"] * count <= configuration.MAX_PREDICTIONS_PER_CONDITION
+
+
+def test_all_pinned_qev_siblings_are_packed_at_every_width():
+    cfg = configuration.configure("full")
+    for model_id in QEV_SIBLINGS:
+        spec = cfg["models"][model_id]
+        assert spec["adapter"] == "qev"
+        assert spec["params"]["request_mode"] == "packed"
+        assert configuration.supported_batches(spec) == configuration.REQUESTED_WIDTHS
+        assert set(ACTIVE_WIDTHS) <= set(configuration.supported_batches(spec))
+    for model_id in ("qwen2b", "qwen9b", "qwen27b"):
+        assert configuration.supported_batches(cfg["models"][model_id]) == configuration.REQUESTED_WIDTHS
+        assert "request_mode" not in cfg["models"][model_id]["params"]
+
+
+def test_legacy_gpu_pilot_contract_is_verification_only():
+    cfg = configuration.configure("gpu_pilot", LEGACY_PROFILE)
     assert set(cfg) == RAW_KEYS
+    assert "execution_protocol" not in cfg
     assert list(cfg["models"]) == ["qwen2b", "joey1"]
     assert (cfg["sample_size"], cfg["warmup_rows"], cfg["seed"], cfg["repetitions"]) == (49, 17, 1729, 1)
     assert cfg["batch_sizes"] == [1, 16]
@@ -45,8 +115,10 @@ def test_gpu_pilot_contract():
     assert cfg["measure_training"] is False
 
 
-def test_cpu_pilot_contract_and_sampling_workload():
-    cfg = configuration.configure("cpu_pilot")
+def test_legacy_cpu_pilot_contract_and_sampling_workload():
+    cfg = configuration.configure("cpu_pilot", LEGACY_PROFILE)
+    assert set(cfg) == RAW_KEYS
+    assert "execution_protocol" not in cfg
     assert list(cfg["models"]) == ["svm", "nb", "fasttext"]
     assert cfg["sample_size"] == 65 and cfg["repetitions"] == 1
     assert cfg["passes"]["svm"] == {"1": 450, "16": 4000}
@@ -57,21 +129,27 @@ def test_cpu_pilot_contract_and_sampling_workload():
         assert model["device"] == "cpu"
 
 
-def test_full_contract_all_nine_and_qev_width16_remains_requested():
-    cfg = configuration.configure("full")
-    expected = ["qwen2b", "joey1", "qwen9b", "elephant1", "qwen27b", "mammoth1", "svm", "nb", "fasttext"]
-    assert list(cfg["models"]) == expected
-    assert (cfg["sample_size"], cfg["warmup_rows"], cfg["seed"], cfg["repetitions"]) == (257, 17, 1729, 3)
+def test_legacy_full_phase_still_resolves_for_verification():
+    cfg = configuration.configure("full", LEGACY_PROFILE)
+    assert set(cfg) == RAW_KEYS
+    assert "execution_protocol" not in cfg
     assert cfg["batch_sizes"] == [1, 16]
     assert cfg["passes"]["qwen2b"] == {"1": 2, "16": 4}
-    assert cfg["passes"]["qwen9b"] == {"1": 2, "16": 4}
-    assert cfg["passes"]["qwen27b"] == {"1": 2, "16": 4}
+    assert cfg["passes"]["joey1"] == {"1": 1}
+    assert cfg["passes"]["fasttext"] == {"1": 1000, "16": 1000}
+    assert cfg["energy"]["sample_secs"] == 1
+    for model_id in QEV_SIBLINGS:
+        assert "request_mode" not in cfg["models"][model_id]["params"]
+        assert configuration.supported_batches(cfg["models"][model_id]) == (1,)
+
+
+def test_reported_laptop_full_profile_keeps_its_isolated_panel():
+    cfg = configuration.configure("full", FULL_ISOLATED_PROFILE)
+    assert set(cfg) == RAW_KEYS
+    assert cfg["energy"]["sample_secs"] == 0.2
+    assert cfg["passes"]["fasttext"] == {"1": 1750, "16": 1750}
     assert cfg["passes"]["svm"] == {"1": 200, "16": 1200}
-    assert cfg["passes"]["nb"] == {"1": 200, "16": 1200}
-    for model_id in ("joey1", "elephant1", "mammoth1"):
-        assert cfg["models"][model_id]["adapter"] == "qev"
-        assert cfg["passes"][model_id] == {"1": 1}
-    assert cfg["measure_training"] is True
+    assert cfg["batch_sizes"] == [1, 16]
 
 
 def test_gpu_preflight_fields_and_exact_weight_totals():
@@ -108,14 +186,16 @@ def test_runtime_paths_stay_relative_and_deterministic():
 
 
 def test_returned_configuration_is_detached():
-    first = configuration.configure("gpu_pilot")
+    first = configuration.configure("full")
     first["dataset"]["path"] = "changed"
     first["models"]["qwen2b"]["params"]["max_tokens"] = 99
     first["passes"]["qwen2b"]["1"] = 99
-    second = configuration.configure("gpu_pilot")
+    first["execution_protocol"] = "changed"
+    second = configuration.configure("full")
     assert second["dataset"]["path"] == "data/tweeteval"
     assert second["models"]["qwen2b"]["params"]["max_tokens"] == 8
-    assert second["passes"]["qwen2b"]["1"] == 3
+    assert second["passes"]["qwen2b"]["1"] == 2
+    assert second["execution_protocol"] == PROTOCOL
 
 
 def test_dataset_selection_replays_exact_test_and_warmup_ids():
@@ -151,8 +231,9 @@ def test_phase_validation(tmp_path, mutation, match):
 
 
 @pytest.mark.parametrize("model_id,width,count", [
-    ("qwen2b", "16", 0),
-    ("svm", "1", 1000000),
+    ("qwen2b", "64", 0),
+    ("svm", "64", 1000000),
+    ("fasttext", "1", 0),
 ])
 def test_pass_counts_are_positive_and_memory_bounded(tmp_path, model_id, width, count):
     value = document()
@@ -163,16 +244,28 @@ def test_pass_counts_are_positive_and_memory_bounded(tmp_path, model_id, width, 
 
 def test_every_supported_requested_width_needs_passes(tmp_path):
     value = document()
-    del value["phases"]["full"]["passes"]["svm"]["16"]
+    del value["phases"]["full"]["passes"]["svm"]["64"]
     with pytest.raises(ValueError, match="exactly cover supported requested widths"):
         configuration.configure("full", write_document(tmp_path, value))
 
 
 def test_qev_cannot_be_given_fake_independent_tweet_batching(tmp_path):
+    # Without the explicit packed opt-in the wider widths stay requested but
+    # unsupported, so wider pass entries no longer cover the capability exactly.
     value = document()
-    value["phases"]["full"]["passes"]["joey1"]["16"] = 1
+    del value["models"]["joey1"]["params"]["request_mode"]
     with pytest.raises(ValueError, match="exactly cover supported requested widths"):
         configuration.configure("full", write_document(tmp_path, value))
+
+
+def test_unpacked_qev_keeps_wider_widths_visible_without_passes(tmp_path):
+    value = document()
+    del value["models"]["joey1"]["params"]["request_mode"]
+    value["phases"]["full"]["passes"]["joey1"] = {"1": 1}
+    cfg = configuration.configure("full", write_document(tmp_path, value))
+    assert cfg["batch_sizes"] == ACTIVE_WIDTHS
+    assert cfg["passes"]["joey1"] == {"1": 1}
+    assert configuration.supported_batches(cfg["models"]["joey1"]) == (1,)
 
 
 @pytest.mark.parametrize("mutation, match", [
@@ -203,7 +296,7 @@ def test_duplicate_json_keys_are_rejected(tmp_path):
 
 
 def test_nonfinite_json_is_rejected(tmp_path):
-    text = configuration.DEFAULT_CONFIG.read_text(encoding="utf-8").replace('"sample_secs": 1', '"sample_secs": NaN', 1)
+    text = configuration.DEFAULT_CONFIG.read_text(encoding="utf-8").replace('"sample_secs": 0.2', '"sample_secs": NaN', 1)
     path = tmp_path / "experiment.json"
     path.write_text(text, encoding="utf-8")
     with pytest.raises(ValueError, match="non-finite JSON constant"):
@@ -218,6 +311,7 @@ def test_configuration_does_no_runtime_or_network_work(monkeypatch):
     monkeypatch.setattr(subprocess, "run", lambda *a, **k: (_ for _ in ()).throw(AssertionError("subprocess")))
     monkeypatch.setattr(socket, "create_connection", lambda *a, **k: (_ for _ in ()).throw(AssertionError("network")))
     assert configuration.configure("full")["sample_size"] == 257
+    assert configuration.configure("full", LEGACY_PROFILE)["sample_size"] == 257
 
 
 def test_supported_batches_policy_is_coarse_and_deterministic():
@@ -230,14 +324,69 @@ def test_supported_batches_policy_is_coarse_and_deterministic():
             else:
                 assert isinstance(value, tuple) and value
     assert configuration.supported_batches(cfg["models"]["qwen2b"]) == WIDE_WIDTHS
-    # The published default keeps the historical single-tweet QEV capability.
-    assert configuration.supported_batches(cfg["models"]["joey1"]) == (1,)
-    assert configuration.supported_batches(cfg["models"]["elephant1"]) == (1,)
-    assert configuration.supported_batches(cfg["models"]["mammoth1"]) == (1,)
+    # Every pinned QEV sibling opts into packed requests in the active stage.
+    for model_id in QEV_SIBLINGS:
+        assert configuration.supported_batches(cfg["models"][model_id]) == WIDE_WIDTHS
     with pytest.raises(ValueError, match="unsupported adapter"):
         configuration.supported_batches({"adapter": "mystery"})
     with pytest.raises(ValueError, match="must be an object"):
         configuration.supported_batches(None)
+
+
+def test_execution_protocol_is_optional_validated_and_non_breaking(tmp_path):
+    legacy = legacy_document()
+    before = configuration.configure("full", write_document(tmp_path, legacy))
+    assert "execution_protocol" not in before
+    legacy["phases"]["full"]["execution_protocol"] = PROTOCOL
+    after = configuration.configure("full", write_document(tmp_path, legacy))
+    assert set(after) - set(before) == {"execution_protocol"}
+    assert after["execution_protocol"] == PROTOCOL
+    assert {key: value for key, value in after.items() if key != "execution_protocol"} == before
+
+
+@pytest.mark.parametrize("protocol", ["engine-session-v2", "", None, True, 1, ["engine-session-v1"]])
+def test_execution_protocol_values_are_a_fixed_allowlist(tmp_path, protocol):
+    value = document()
+    value["phases"]["full"]["execution_protocol"] = protocol
+    with pytest.raises(ValueError, match="execution_protocol"):
+        configuration.configure("full", write_document(tmp_path, value))
+
+
+def test_only_a_declared_protocol_is_executable():
+    assert configuration.may_execute(configuration.configure("full")) is True
+    for relative, phase in (
+        (LEGACY_PROFILE, "gpu_pilot"),
+        (LEGACY_PROFILE, "cpu_pilot"),
+        (LEGACY_PROFILE, "full"),
+        (FULL_ISOLATED_PROFILE, "full"),
+        (CPU_ISOLATED_PROFILE, "cpu_pilot"),
+        (WIDTH_PROFILE, "gpu_widths"),
+    ):
+        cfg = configuration.configure(phase, relative)
+        assert configuration.may_execute(cfg) is False
+        # The protocol is never inferred: a resolution cannot be executed unless
+        # the phase declared it.
+        assert "execution_protocol" not in cfg
+    with pytest.raises(ValueError, match="must be an object"):
+        configuration.may_execute(None)
+
+
+def test_execution_protocol_is_phase_level_not_document_level(tmp_path):
+    value = document()
+    del value["phases"]["full"]["execution_protocol"]
+    value["execution_protocol"] = PROTOCOL
+    with pytest.raises(ValueError, match="unknown keys"):
+        configuration.configure("full", write_document(tmp_path, value))
+
+
+def test_historical_profiles_stay_protocol_free_for_the_runner():
+    # A historical profile is verification-only: it must stay protocol-free so the
+    # runner can recognise it instead of executing it.
+    for relative in (LEGACY_PROFILE, FULL_ISOLATED_PROFILE, CPU_ISOLATED_PROFILE, WIDTH_PROFILE):
+        value = load(relative)
+        for phase in value["phases"].values():
+            assert "execution_protocol" not in phase
+    assert document()["phases"]["full"]["execution_protocol"] == PROTOCOL
 
 
 def test_gpu_widths_profile_contract():
@@ -297,17 +446,6 @@ def test_request_mode_is_a_strict_qev_only_opt_in(tmp_path, mutation):
         configuration.configure("gpu_widths", write_document(tmp_path, value))
 
 
-def test_unpacked_qev_keeps_wider_widths_visible_without_passes(tmp_path):
-    value = width_document()
-    del value["models"]["joey1"]["params"]["request_mode"]
-    value["phases"]["gpu_widths"]["passes"]["joey1"] = {"1": 1}
-    path = write_document(tmp_path, value)
-    cfg = configuration.configure("gpu_widths", path)
-    assert cfg["batch_sizes"] == list(WIDE_WIDTHS)
-    assert cfg["passes"]["joey1"] == {"1": 1}
-    assert configuration.supported_batches(cfg["models"]["joey1"]) == (1,)
-
-
 @pytest.mark.parametrize("width", [0, 2, 32, 512, True, 4.0, "4"])
 def test_requested_widths_are_a_fixed_allowlist(tmp_path, width):
     value = width_document()
@@ -317,22 +455,28 @@ def test_requested_widths_are_a_fixed_allowlist(tmp_path, width):
         configuration.configure("gpu_widths", write_document(tmp_path, value))
 
 
-def test_published_configs_and_phases_are_unchanged():
-    # The historical files keep their content hashes: the wider capability is a
-    # new profile, not an edit of published configurations.
+def test_published_configs_and_profiles_are_unchanged():
+    # The historical files keep their content hashes: the active stage is the new
+    # experiment.json, and the previous one is archived byte-for-byte.
     expected = {
-        "experiment.json": "d69b8d5b1d4063dda167ba0dbf02ac5586a0ac03a6fe426ae3b9e358f11abc4c",
+        "experiment.json": "0301ccd6eb5e3d2d1d6d21ea0f425201d66969184420369fa4ee5114fa9d29ea",
+        "profiles/legacy-experiment.json": "d69b8d5b1d4063dda167ba0dbf02ac5586a0ac03a6fe426ae3b9e358f11abc4c",
         "profiles/laptop-full-isolated-02.json": "02f11e29e70a6bc8223faa66e0be5f0f8ba8572babec399759f8bdd113ca135a",
         "profiles/laptop-cpu-isolated-02.json": "84f333434eb237e2e7d18bed66aa95e9c2979190b7d1e0560a5c8a6e86afe346",
+        "profiles/laptop-gpu-widths.json": "2fbee0e66bb53c4a93e336e38155aa383d685ca127d14a99ea12d44b2cf199b1",
     }
     for relative, digest in expected.items():
         path = configuration.ROOT / relative
         assert sha256(path.read_bytes()).hexdigest() == digest
+    # Historical roots keep resolving at widths 1/16 for verification.
     for path, phase in (
-        (configuration.DEFAULT_CONFIG, "gpu_pilot"),
-        (configuration.DEFAULT_CONFIG, "cpu_pilot"),
-        (configuration.DEFAULT_CONFIG, "full"),
-        (configuration.ROOT / "profiles/laptop-full-isolated-02.json", "full"),
-        (configuration.ROOT / "profiles/laptop-cpu-isolated-02.json", "cpu_pilot"),
+        (LEGACY_PROFILE, "gpu_pilot"),
+        (LEGACY_PROFILE, "cpu_pilot"),
+        (LEGACY_PROFILE, "full"),
+        (FULL_ISOLATED_PROFILE, "full"),
+        (CPU_ISOLATED_PROFILE, "cpu_pilot"),
     ):
-        assert configuration.configure(phase, path)["batch_sizes"] == [1, 16]
+        cfg = configuration.configure(phase, path)
+        assert cfg["batch_sizes"] == [1, 16]
+        assert "execution_protocol" not in cfg
+    assert configuration.configure("full")["batch_sizes"] == ACTIVE_WIDTHS

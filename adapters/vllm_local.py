@@ -121,6 +121,15 @@ class VLLMLocalAdapter:
         self._pid: int | None = None
         self._atexit_registered = False
 
+    @property
+    def compute_process_id(self) -> int | None:
+        """PID of the live, owned vLLM server, or ``None`` when not running."""
+        with self._lock:
+            process = self._process
+            if process is None or process.poll() is not None:
+                return None
+            return int(process.pid)
+
     def _resolve_python(self) -> Path:
         configured = self.spec.get("python")
         if configured:
@@ -504,6 +513,63 @@ class VLLMLocalAdapter:
                 self.close()
                 raise
 
+    def set_submission_width(self, width: int) -> dict[str, Any]:
+        """Select the next closed-loop burst width without restarting the server.
+
+        Call after :meth:`setup` and between prediction windows. The startup
+        declaration is the FD-budget maximum: runtime selections may lower it,
+        never raise it. The returned JSON-safe receipt is the per-window
+        provenance to attach to that window's run metadata.
+        """
+        with self._lock:
+            if (
+                not self._ready
+                or self._closed
+                or self._process is None
+                or self._process.poll() is not None
+            ):
+                raise RuntimeError(
+                    "set_submission_width requires a live, set-up vLLM engine"
+                )
+            if isinstance(width, bool) or not isinstance(width, int) or width not in SUBMISSION_WIDTHS:
+                raise Unavailable(
+                    f"submission_width must be one of {list(SUBMISSION_WIDTHS)}, not {width!r}"
+                )
+            if width > self._burst_width:
+                raise Unavailable(
+                    f"submission_width {width} exceeds the startup maximum "
+                    f"{self._burst_width}; restart with a larger FD-budget declaration"
+                )
+            budget = self._check_client_budget(width)
+            previous = self._submission_width
+            self._submission_width = width
+            self._submission_width_source = "runtime"
+            self._request_policy.update(
+                independent_request_threads=width,
+                submission_width=width,
+                submission_width_source="runtime",
+                max_concurrent_client_requests=width,
+                max_queue_waves=_queue_waves(width),
+            )
+            receipt = {
+                "submission_width": width,
+                "submission_width_source": "runtime",
+                "independent_request_threads": width,
+                "max_concurrent_client_requests": width,
+                "scheduler_max_num_seqs": SCHEDULER_MAX_NUM_SEQS,
+                "max_queue_waves": _queue_waves(width),
+                "startup_max_submission_width": self._burst_width,
+                "server_pid": self._pid,
+                "server_restarted": False,
+                **budget,
+            }
+            self._log(
+                "submission_width_set",
+                previous_submission_width=previous,
+                **receipt,
+            )
+            return _jsonable(receipt)
+
     def _predict_one(self, text: str) -> dict[str, Any]:
         if not isinstance(text, str):
             raise TypeError("vLLM predict texts must be strings")
@@ -578,10 +644,11 @@ class VLLMLocalAdapter:
                 source = "caller_group" if width == len(texts) else "capped"
             else:
                 width = self._submission_width
-                # A group at or below the declared width is exactly one burst;
-                # a wider one is split, which is labelled rather than silently
-                # reshaped.
-                source = "declared" if len(texts) <= width else "declared_split"
+                # A legal runner group is exactly one burst. Oversized direct
+                # caller input retains the historical split, explicitly labelled.
+                source = "runtime" if self._submission_width_source == "runtime" else "declared"
+                if len(texts) > width:
+                    source += "_split"
             self._check_client_budget(width)
             group_sizes = [len(texts[start : start + width]) for start in range(0, len(texts), width)]
             self._log(
@@ -589,6 +656,8 @@ class VLLMLocalAdapter:
                 tweets=len(texts),
                 submission_width=width,
                 submission_width_source=source,
+                startup_max_submission_width=self._burst_width,
+                server_pid=self._pid,
                 scheduler_max_num_seqs=SCHEDULER_MAX_NUM_SEQS,
                 queue_waves=[_queue_waves(size) for size in group_sizes],
                 group_sizes=group_sizes,

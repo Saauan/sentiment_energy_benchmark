@@ -10,11 +10,14 @@ heavy dependencies in a dedicated, offline subprocess with a bounded lifecycle.
 
 The default mode supports only one independent tweet per request. QEV's fork
 handles question branches over **one state**, not multiple independent states.
-The `gpu_widths` profile opts Joey into `params.request_mode="packed"`. It puts
-1, 4, 16, 64, or 256 tweets in one request, using a numbered list and one
-three-option question per tweet. Singleton requests keep the baseline format.
-This is shared context, not independent batching: other tweets can affect each
-answer. The model may evaluate the branches in multiple chunks.
+The active protocol ("engine-session-v1") opts every pinned QEV sibling
+(Joey-1, Elephant-1, Mammoth-1) into `params.request_mode="packed"` at widths 1,
+16, and 64. It puts the group's tweets in one request, using a numbered list
+and one three-option question per tweet. Singleton requests keep the baseline
+format. This is shared context, not independent batching: other tweets can
+affect each answer. The model may evaluate the branches in multiple chunks. The
+historical ten-condition sweep packed Joey only, at widths 1, 4, 16, 64, and
+256.
 
 ## Exact model-specific mapping
 
@@ -29,8 +32,10 @@ for this inspection.
 | `baselabs/mammoth-1` | `858aab610d4d124315ebf72d2f36c5e7341f758f` | 27,356,728,560 | 49,825,162,976 + 4,888,445,168 = 54,713,608,144 | `7c80d74dfe54ed2de25007a979c06743dbc29518` |
 
 These are decimal weight-byte sizes, not measured peak VRAM. Actual runtime
-memory requires a GPU pilot even when the weight-only envelope fits. Mammoth
-remains subject to a separate memory pilot.
+memory needs a runtime fit check under the README readiness rule even when the
+weight-only envelope fits; Mammoth in particular. Weight-byte preflight alone
+never authorizes a measured run, and the packed widths are new fit/sampling
+conditions rather than inherited evidence.
 
 All three cards and all three identical `setup.sh` files specify:
 
@@ -190,9 +195,12 @@ native convolution fallback rather than the card image's PyTorch 2.8 stack and
 optional causal-conv1d extension. This complete-system difference must remain
 explicit in run metadata.
 
-Before measured inference, perform the normal warmup and run preflight. Peak GPU memory was not separately sampled
-during the smoke. The packed profile checks each distinct test and warmup
-request using the pinned tokenizer and renderer before inference. It records
+Before measured inference, perform the normal warmup and run preflight. Peak GPU
+memory was not separately sampled during the smoke. Under the active protocol the
+packed condition checks every distinct test and warmup request for every packed
+sibling using the pinned tokenizer and renderer before inference. It records
 longest branch and total shared-prefix-plus-suffix token counts in
-`qev_context.json` and refuses over-limit inputs without truncation. This does
-not certify that context-fitting requests fit GPU memory.
+`qev_context.json` and refuses over-limit inputs without truncation. An
+over-context group skips only that width's loaded-idle/inference pair inside the
+engine session; the session's other widths continue. This gate does not certify
+that context-fitting requests fit GPU memory.

@@ -121,7 +121,12 @@ def _new_run_id(config_sha: str, dataset_sha: str, trial: dict) -> str:
 
 
 def build_plan(cfg: dict, dataset_info: dict, train_count: int) -> dict:
-    """Build deterministic seeded blocks; no wall-clock field enters identity."""
+    """Build a deterministic plan, retaining exact historical format-1 identities."""
+    protocol = cfg.get("execution_protocol")
+    if protocol == "engine-session-v1":
+        return _build_session_plan(cfg, dataset_info, train_count)
+    if protocol is not None:
+        raise ValueError(f"unknown execution protocol: {protocol!r}")
     config_sha = storage.identity(cfg)
     dataset_sha = storage.identity(dataset_info)
     conditions = [
@@ -200,6 +205,60 @@ def build_plan(cfg: dict, dataset_info: dict, train_count: int) -> dict:
         "block_order": "sha256(seed, condition), then condition", "config": cfg,
         "blocks": blocks, "trials": trials,
     }
+
+
+def _build_session_plan(cfg: dict, dataset_info: dict, train_count: int) -> dict:
+    config_sha, dataset_sha = storage.identity(cfg), storage.identity(dataset_info)
+    trials, sessions = [], []
+    for rep in range(cfg["repetitions"]):
+        models = sorted(cfg["models"], key=lambda model: (
+            storage.identity({"seed": cfg["seed"], "rep": rep, "model": model}), model))
+        for model in models:
+            spec = cfg["models"][model]
+            key = {"model": model, "rep": rep}
+            session_id = storage.identity({"config": config_sha, "dataset": dataset_sha, "session": key})[:24]
+            widths = sorted(set(cfg["batch_sizes"]), key=lambda width: (
+                storage.identity({"seed": cfg["seed"], "session": key, "width": width}), width))
+            session = {"session_id": session_id, "block_id": session_id,
+                       "session_index": len(sessions), "block_index": len(sessions),
+                       **key, "widths": widths, "trials": []}
+            supported = configuration.supported_batches(spec)
+
+            def add(kind, width, device=None, training=None, loaded=None):
+                passes = (_passes(cfg, model, width) if kind == "inference"
+                          and (supported is None or width in supported) else 0)
+                expected = train_count if kind == "training" else cfg["sample_size"] * passes if kind == "inference" else 0
+                native = 0 if kind == "training" else expected
+                if kind == "inference" and _packed_qev(spec):
+                    native = ((cfg["sample_size"] + width - 1) // width) * passes
+                trial = {"run_id": "", "phase": cfg["phase"], "kind": kind, "model": model,
+                         "batch_size": width, "rep": rep, "session_id": session_id,
+                         "session_index": session["session_index"], "block_id": session_id,
+                         "block_index": session["block_index"], "adapter": spec["adapter"],
+                         "device": "cuda" if _is_cuda(spec) else "cpu", "passes": passes,
+                         "expected_count": expected, "native_count": native,
+                         "panel_size": cfg["sample_size"] if kind == "inference" else 0,
+                         "config_sha256": config_sha, "dataset_sha256": dataset_sha,
+                         "device_idle_run_id": device, "training_run_id": training,
+                         "loaded_idle_run_id": loaded}
+                trial["run_id"] = _new_run_id(config_sha, dataset_sha, {k: v for k, v in trial.items() if k != "run_id"})
+                trials.append(trial)
+                session["trials"].append(trial["run_id"])
+                return trial["run_id"]
+
+            idle = add("device_idle", 0)
+            training = add("training", 0, idle) if cfg["measure_training"] and spec["adapter"] in CLASSICAL else None
+            for width in widths:
+                loaded = add("loaded_idle", width, idle, training) if _is_cuda(spec) and model in cfg["loaded_idle_adapters"] else None
+                add("inference", width, idle, training, loaded)
+            sessions.append(session)
+    return {"format_version": 2, "execution_protocol": "engine-session-v1", "phase": cfg["phase"],
+            "config_sha256": config_sha, "dataset_sha256": dataset_sha, "dataset": dataset_info,
+            "train_count": train_count,
+            "train_sha256": storage.identity({"count": train_count, "files": dataset_info["files_sha256"]}),
+            "session_order": "rep ascending, sha256(seed, rep, model), then model",
+            "width_order": "sha256(seed, session, width), then width", "config": cfg,
+            "sessions": sessions, "blocks": sessions, "trials": trials}
 
 
 def _immutable_plan(path: Path, plan: dict) -> None:
@@ -350,7 +409,8 @@ def _publish(run: storage.Run, attempt: Path, result: dict) -> None:
 
 
 def _measure_idle(root: Path, trial: dict, cfg: dict, dataset_info: dict, train_count: int,
-                  host: dict, active: dict, adapter_metadata: dict | None = None) -> None:
+                  host: dict, active: dict, adapter_metadata: dict | None = None,
+                  check_after=None) -> None:
     run = active.get(trial["run_id"])
     if run is None:
         run, attempt = _start(root, trial)
@@ -363,6 +423,8 @@ def _measure_idle(root: Path, trial: dict, cfg: dict, dataset_info: dict, train_
     task = _native_task(trial, cfg, dataset_info, train_count)
     meter = energy.Meter(attempt / "energy", task, cfg["energy"])
     _, window_s, native = meter.capture(lambda: sleep(_secs(cfg, trial["kind"])))
+    if check_after is not None:
+        check_after()
     result = _base_result(
         trial, cfg, dataset_info, host, native, task,
         adapter_metadata or {"adapter": None, "role": "unloaded device idle"},
@@ -379,7 +441,8 @@ def _measure_idle(root: Path, trial: dict, cfg: dict, dataset_info: dict, train_
 
 
 def _measure_training(root: Path, trial: dict, cfg: dict, dataset_info: dict, train_count: int,
-                      train: list, validation: list, host: dict, active: dict, adapter) -> dict:
+                      train: list, validation: list, host: dict, active: dict, adapter,
+                      provenance: dict | None = None, check_after=None) -> dict:
     run = active.get(trial["run_id"])
     if run is None:
         run, attempt = _start(root, trial)
@@ -392,6 +455,10 @@ def _measure_training(root: Path, trial: dict, cfg: dict, dataset_info: dict, tr
     task = _native_task(trial, cfg, dataset_info, train_count)
     meter = energy.Meter(attempt / "energy", task, cfg["energy"])
     metadata, window_s, native = meter.capture(lambda: adapter.setup(train, validation))
+    if check_after is not None:
+        check_after()
+    if provenance is not None:
+        metadata = {**metadata, "engine_session": provenance}
     counts = _empty_counts(train_count)
     counts.update(valid=None, correct=None)
     result = _base_result(trial, cfg, dataset_info, host, native, task, metadata)
@@ -411,7 +478,7 @@ def _measure_training(root: Path, trial: dict, cfg: dict, dataset_info: dict, tr
 
 def _measure_inference(root: Path, trial: dict, cfg: dict, dataset_info: dict, train_count: int,
                        panel: list, host: dict, active: dict, adapter, adapter_metadata: dict,
-                       outside: dict) -> None:
+                       outside: dict, check_after=None) -> None:
     run = active.get(trial["run_id"])
     if run is None:
         run, attempt = _start(root, trial)
@@ -426,6 +493,8 @@ def _measure_inference(root: Path, trial: dict, cfg: dict, dataset_info: dict, t
     rows, window_s, native = meter.capture(
         lambda: workload.run_workload(adapter, panel, trial["batch_size"], trial["passes"])
     )
+    if check_after is not None:
+        check_after()
     started = perf_counter()
     predictions = attempt / "predictions.jsonl"
     digest = workload.persist(predictions, rows)
@@ -497,14 +566,6 @@ def _check_stop(path: Path | None) -> None:
         raise StopRequested(f"stop file exists: {path}")
 
 
-def _references_ready(root: Path, trial: dict, selected_ids: set[str]) -> bool:
-    for field in REFERENCE_FIELDS:
-        reference = trial.get(field)
-        if reference and reference not in selected_ids and _state_status(root, {"run_id": reference}) != "complete":
-            return False
-    return True
-
-
 def _skip(root: Path, trial: dict, reason: str, receipt: dict | None = None) -> None:
     run, attempt = _start(root, trial)
     if receipt is not None:
@@ -525,17 +586,6 @@ def _failure_status(exc: BaseException, close_error: BaseException | None, attem
     if attempt is not None and hardware.looks_like_oom(exc, attempt):
         return "skipped", "OOM after clean adapter shutdown: " + reason
     return "failed", reason
-
-
-def _preflight_block(cfg: dict, block: dict, host: dict) -> tuple[dict, dict, dict, str | None]:
-    spec = _runtime_spec(cfg["models"][block["model"]])
-    evidence, reason = hardware.preflight(spec, host)
-    receipt = {"host": host, "preflight": evidence}
-    supported = configuration.supported_batches(spec)
-    if reason is None and supported is not None and block["batch_size"] not in supported:
-        reason = f"{spec['adapter']} does not support independent batch {block['batch_size']}"
-        receipt["supported_batches"] = supported
-    return spec, evidence, receipt, reason
 
 
 def _check_packed_context(adapter, panel: list, warmup: list, width: int,
@@ -560,101 +610,209 @@ def _check_packed_context(adapter, panel: list, warmup: list, width: int,
     return checks
 
 
-def _execute_block(root: Path, plan: dict, block: dict, selected: list[dict], data: tuple,
-                   stop_file: Path | None) -> str:
+def _owned_snapshot(adapter=None) -> dict:
+    """Reject foreign compute; only the current process and owned engine PGID qualify."""
+    host = hardware.snapshot()
+    if host.get("gpu") and host.get("gpu_compute_apps") is None:
+        raise Unavailable("GPU compute-app query failed; measurement refused")
+    process = getattr(adapter, "_process", None) if adapter is not None else None
+    pid = getattr(adapter, "compute_process_id", None) if adapter is not None else None
+    if pid is None and process is not None and process.poll() is None:
+        pid = process.pid
+    foreign = []
+    for line in (host.get("gpu_compute_apps") or "").splitlines():
+        try:
+            app_pid = int(line.split(",", 1)[0].strip())
+            owned = app_pid == os.getpid() or (pid is not None and (app_pid == pid or os.getpgid(app_pid) == pid))
+        except (ValueError, ProcessLookupError, PermissionError, OSError):
+            owned = False
+        if not owned:
+            foreign.append(line)
+    if foreign:
+        raise Unavailable("foreign GPU compute app; measurement refused: " + "; ".join(foreign))
+    if adapter is not None and getattr(adapter, "_closed", False):
+        raise RuntimeError("owned engine is closed")
+    if process is not None and process.poll() is not None:
+        raise RuntimeError("owned engine process exited")
+    return host
+
+
+def _new_segment(root: Path, session: dict) -> tuple[Path, dict]:
+    directory = root / session["session_id"] / "engine"
+    directory.mkdir(parents=True, exist_ok=True)
+    number = 1
+    while True:
+        name = f"segment-{number:04d}"
+        path = directory / name
+        try:
+            path.mkdir()
+            break
+        except FileExistsError:
+            number += 1
+    storage.sync_dir(directory)
+    provenance = {"session_id": session["session_id"], "segment_id": name,
+                  "log_dir": str(path.relative_to(root)), "model": session["model"],
+                  "rep": session["rep"], "device_idle_policy": "shared planned session baseline across segments"}
+    storage.atomic_json(path / "segment.json", {**provenance, "started_at": storage.now()})
+    return path, provenance
+
+
+def _execute_session(root: Path, plan: dict, session: dict, selected: list[dict], data: tuple,
+                     stop_file: Path | None) -> str:
     cfg, dataset_info, train, validation, panel, warmup = data
     active: dict[str, storage.Run] = {}
     adapter = None
-    adapter_attempt = None
+    segment_path = None
     receipt = None
+    setup_done = False
+    current = None
     outcome = "complete"
+    selected_by_id = {t["run_id"]: t for t in selected}
     try:
-        host = hardware.snapshot()
-        if host.get("gpu_compute_apps"):
-            raise Unavailable("other active GPU compute app; block refused")
-        model_trials = [t for t in selected if t["kind"] != "device_idle"]
-        # Refuse infeasible model conditions before spending an idle window.
-        # A calibration-only selection deliberately skips this model preflight.
-        if model_trials:
-            _, _, receipt, reason = _preflight_block(cfg, block, host)
+        _check_stop(stop_file)
+        host = _owned_snapshot()
+        spec = _runtime_spec(cfg["models"][session["model"]])
+        supported = configuration.supported_batches(spec)
+        # Unsupported width pairs never cause a model load or a meaningless baseline.
+        model_selected = [t for t in selected if t["kind"] != "device_idle"]
+        valid_widths = [w for w in session["widths"] if supported is None or w in supported]
+        if model_selected:
+            evidence, reason = hardware.preflight(spec, host)
+            receipt = {"host": host, "preflight": evidence}
             if reason:
                 raise Unavailable(reason)
+        else:
+            evidence = None
+        unsupported_ids = set()
+        for t in model_selected:
+            if t["batch_size"] and t["batch_size"] not in valid_widths:
+                _skip(root, t, f"{spec['adapter']} does not support independent batch {t['batch_size']}", receipt)
+                unsupported_ids.add(t["run_id"])
+        model_selected = [t for t in model_selected if t["run_id"] not in unsupported_ids]
         idle = next((t for t in selected if t["kind"] == "device_idle"), None)
         if idle is not None:
-            _check_stop(stop_file)
-            _measure_idle(root, idle, cfg, dataset_info, plan["train_count"], host, active)
-        selected_ids = {trial["run_id"] for trial in selected}
-        runnable = []
-        for trial in model_trials:
-            if _references_ready(root, trial, selected_ids):
-                runnable.append(trial)
+            if not model_selected and any(t["kind"] != "device_idle" for t in selected):
+                _skip(root, idle, "no supported selected width", receipt)
             else:
-                _skip(root, trial, "a required calibration/training reference is not complete")
+                _check_stop(stop_file)
+                _measure_idle(root, idle, cfg, dataset_info, plan["train_count"], _owned_snapshot(), active,
+                              check_after=_owned_snapshot)
+        if not model_selected:
+            return outcome
+        # Do not consume new attempts for trials whose prerequisites are still missing.
+        runnable = []
+        for t in model_selected:
+            missing = [t[f] for f in REFERENCE_FIELDS if t.get(f)
+                       and _state_status(root, {"run_id": t[f]}) != "complete"
+                       and t[f] not in selected_by_id]
+            if missing:
+                _skip(root, t, "required calibration/training reference is not complete: " + ", ".join(missing))
+            else:
+                runnable.append(t)
         if not runnable:
-            return "complete"
+            return outcome
         _check_stop(stop_file)
-        host = hardware.snapshot()
-        if host.get("gpu_compute_apps"):
-            raise Unavailable("other active GPU compute app; model setup refused")
-        # Recheck free VRAM and competing compute after the idle window.
-        spec, evidence, receipt, reason = _preflight_block(cfg, block, host)
+        host = _owned_snapshot()
+        evidence, reason = hardware.preflight(spec, host)
+        receipt = {"host": host, "preflight": evidence}
         if reason:
             raise Unavailable(reason)
-        home = runnable[0]
-        run, attempt = _start(root, home)
-        active[home["run_id"]] = run
-        adapter_attempt = attempt
+        segment_path, provenance = _new_segment(root, session)
         if spec["adapter"] == "vllm":
-            spec["submission_width"] = block["batch_size"]
-        adapter = _create_adapter(spec, attempt)
-        metadata: dict = {}
-        outside: dict = {"preflight": evidence}
+            # Capacity for the largest scheduled supported width; not the trial width.
+            spec["submission_width"] = max(valid_widths)
+        current = runnable[0]
+        run, _ = _start(root, current)
+        active[current["run_id"]] = run
+        adapter = _create_adapter(spec, segment_path)
         training = next((t for t in runnable if t["kind"] == "training"), None)
-        inference = next((t for t in runnable if t["kind"] == "inference"), None)
-        loaded = next((t for t in runnable if t["kind"] == "loaded_idle"), None)
+        outside_setup = {"preflight": evidence}
         if training is not None:
+            current = training
             _check_stop(stop_file)
-            metadata = _measure_training(
-                root, training, cfg, dataset_info, plan["train_count"], train, validation,
-                host, active, adapter,
-            )
-            outside["setup_s"] = None
-            outside["setup_measured_in"] = training["run_id"]
-        elif inference is not None or loaded is not None:
+            metadata = _measure_training(root, training, cfg, dataset_info, plan["train_count"],
+                                         train, validation, _owned_snapshot(adapter), active, adapter, provenance,
+                                         check_after=lambda: _owned_snapshot(adapter))
+            outside_setup.update(setup_s=None, setup_measured_in=training["run_id"])
+        else:
             started = perf_counter()
             metadata = adapter.setup(train, validation)
-            outside["setup_s"] = perf_counter() - started
-            outside["setup_measured_in"] = home.get("training_run_id")
-        if inference is not None:
+            metadata = {**metadata, "engine_session": provenance}
+            outside_setup.update(setup_s=perf_counter() - started, setup_measured_in=None,
+                                 previous_training_run_id=current.get("training_run_id"))
+        setup_done = True
+        _owned_snapshot(adapter)
+        for width in session["widths"]:
+            pair = [t for t in runnable if t["batch_size"] == width and t["kind"] in {"loaded_idle", "inference"}]
+            if not pair:
+                continue
             _check_stop(stop_file)
-            if _packed_qev(spec):
-                run = active.get(inference["run_id"])
+            current = next((t for t in pair if t["kind"] == "inference"), pair[0])
+            if any(t.get(f) and _state_status(root, {"run_id": t[f]}) != "complete"
+                   for t in pair for f in ("device_idle_run_id", "training_run_id")):
+                for t in pair:
+                    if t["run_id"] in active:
+                        active.pop(t["run_id"]).finish("skipped", "required session dependency is not complete")
+                    else:
+                        _skip(root, t, "required session dependency is not complete")
+                continue
+            _owned_snapshot(adapter)
+            width_receipt = adapter.set_submission_width(width) if spec["adapter"] == "vllm" else {}
+            if spec["adapter"] == "vllm" and (not isinstance(width_receipt, dict) or width_receipt.get("submission_width") != width):
+                raise ValueError("vLLM width selection did not return the requested policy receipt")
+            width_metadata = {**metadata, "trial_width_policy": {
+                **width_receipt, "submission_width": width,
+                "semantics": "packed QEV envelopes" if _packed_qev(spec) else "independent tweet groups"}}
+            outside = dict(outside_setup)
+            inference = next((t for t in pair if t["kind"] == "inference"), None)
+            loaded = next((t for t in pair if t["kind"] == "loaded_idle"), None)
+            if spec["adapter"] == "qev":
+                # Also gate a loaded-only selection against its paired inference workload.
+                context_trial = inference or loaded
+                run = active.get(context_trial["run_id"])
                 if run is None:
-                    run, inference_attempt = _start(root, inference)
-                    active[inference["run_id"]] = run
+                    run, attempt = _start(root, context_trial)
+                    active[context_trial["run_id"]] = run
                 else:
-                    inference_attempt = run.path / run.state["active_attempt"]
-                context_file = inference_attempt / "qev_context.json"
+                    attempt = run.path / run.state["active_attempt"]
+                context_file = attempt / "qev_context.json"
                 started = perf_counter()
-                context = _check_packed_context(adapter, panel, warmup, inference["batch_size"],
-                                                context_file, stop_file)
+                try:
+                    context = _check_packed_context(adapter, panel, warmup, width, context_file, stop_file)
+                except Unavailable as exc:
+                    if not isinstance(getattr(exc, "context_receipt", None), dict) or exc.context_receipt.get("fit") is not False:
+                        raise
+                    _owned_snapshot(adapter)  # A closed/failed worker is session-fatal.
+                    for t in pair:
+                        if t["run_id"] in active:
+                            active.pop(t["run_id"]).finish("skipped", str(exc))
+                        else:
+                            _skip(root, t, "paired context preflight: " + str(exc))
+                    continue
                 outside["context_preflight_s"] = perf_counter() - started
                 outside["context_preflight"] = {"file": context_file.name, "groups": len(context),
                                                 "sha256": storage.content_hash(context_file)}
             started = perf_counter()
             if warmup:
-                workload.run_workload(adapter, warmup, inference["batch_size"], 1)
-            outside["warmup_s"] = perf_counter() - started
-            outside["warmup_rows"] = len(warmup)
-        if loaded is not None:
-            _check_stop(stop_file)
-            _measure_idle(root, loaded, cfg, dataset_info, plan["train_count"], host, active, metadata)
-        if inference is not None:
-            _check_stop(stop_file)
-            _measure_inference(
-                root, inference, cfg, dataset_info, plan["train_count"], panel,
-                host, active, adapter, metadata, outside,
-            )
+                workload.run_workload(adapter, warmup, width, 1)
+            outside.update(warmup_s=perf_counter() - started, warmup_rows=len(warmup))
+            _owned_snapshot(adapter)
+            if loaded is not None:
+                current = loaded
+                _check_stop(stop_file)
+                _measure_idle(root, loaded, cfg, dataset_info, plan["train_count"], _owned_snapshot(adapter), active, width_metadata,
+                              check_after=lambda: _owned_snapshot(adapter))
+                _owned_snapshot(adapter)
+            if inference is not None:
+                current = inference
+                _check_stop(stop_file)
+                # A completed loaded baseline may belong to a prior segment on resume.
+                baseline = _reference_result(root, inference.get("loaded_idle_run_id"))
+                width_metadata["loaded_idle_engine_session"] = (baseline or {}).get("adapter", {}).get("engine_session")
+                _measure_inference(root, inference, cfg, dataset_info, plan["train_count"], panel,
+                                   _owned_snapshot(adapter), active, adapter, width_metadata, outside,
+                                   check_after=lambda: _owned_snapshot(adapter))
+                _owned_snapshot(adapter)
         adapter.close()
         adapter = None
         return outcome
@@ -666,39 +824,47 @@ def _execute_block(root: Path, plan: dict, block: dict, selected: list[dict], da
             except BaseException as close_exc:
                 close_error = close_exc
             adapter = None
-        status, reason = _failure_status(exc, close_error, adapter_attempt)
+        # After successful setup, do not scan shared logs containing earlier-width warnings.
+        error_path = segment_path if not setup_done else (
+            root / current["run_id"] / "no-current-logs" if current is not None else root / "no-current-logs")
+        status, reason = _failure_status(exc, close_error, error_path)
         if status == "incomplete":
             outcome = "interrupted" if isinstance(exc, (SignalReceived, KeyboardInterrupt)) else "stopped"
+        else:
+            outcome = status
+        if current is not None and current["run_id"] not in active and _state_status(root, current) in {"pending", "running"}:
+            run, _ = _start(root, current)
+            active[current["run_id"]] = run
         for run in list(active.values()):
             if run.state["status"] == "running":
                 attempt = run.path / run.state["active_attempt"]
-                storage.atomic_json(attempt / "failure.json",
-                                    {"error": reason, "status": status, "preflight": receipt})
+                storage.atomic_json(attempt / "failure.json", {"error": reason, "status": status, "preflight": receipt})
                 run.finish(status, reason)
-        active.clear()
         if status != "incomplete":
             for trial in selected:
                 if _state_status(root, trial) in {"pending", "running"}:
-                    _skip(root, trial, "block dependency did not complete: " + reason, receipt)
+                    _skip(root, trial, "session dependency/engine did not complete: " + reason, receipt)
         return outcome
     finally:
         if adapter is not None:
             adapter.close()
+        if segment_path is not None:
+            storage.atomic_json(segment_path / "end.json", {"finished_at": storage.now(), "outcome": outcome})
 
 
 def run_selected(root: Path, plan: dict, selected: list[dict], data: tuple,
                  stop_file: Path | None = None) -> dict:
-    by_block: dict[str, list[dict]] = {}
+    if plan.get("format_version") != 2 or plan.get("execution_protocol") != "engine-session-v1":
+        raise ValueError("archived format-1 plans are read/verify only; execution requires engine-session-v1")
+    by_session: dict[str, list[dict]] = {}
     for trial in selected:
-        by_block.setdefault(trial["block_id"], []).append(trial)
-    interrupted = False
-    stopped = False
-    for block in plan["blocks"]:
-        trials = by_block.get(block["block_id"])
+        by_session.setdefault(trial["session_id"], []).append(trial)
+    interrupted = stopped = False
+    for session in plan["sessions"]:
+        trials = by_session.get(session["session_id"])
         if not trials:
             continue
-        trials.sort(key=lambda trial: KIND_ORDER.index(trial["kind"]))
-        outcome = _execute_block(root, plan, block, trials, data, stop_file)
+        outcome = _execute_session(root, plan, session, trials, data, stop_file)
         interrupted |= outcome == "interrupted"
         stopped |= outcome == "stopped"
         if interrupted or stopped:
@@ -768,6 +934,20 @@ def verify_plan(root: Path, plan: dict, data: tuple) -> dict:
             result = storage.load(attempt / "result.json")
             if result.get("run_id") != run_id or result.get("trial") != trial or result.get("valid") is not True:
                 raise ValueError("result identity/trial/valid flag mismatch")
+            if plan.get("format_version") == 2 and trial["kind"] != "device_idle":
+                provenance = result.get("adapter", {}).get("engine_session") or {}
+                segment = provenance.get("segment_id")
+                expected_dir = Path(trial["session_id"]) / "engine" / str(segment)
+                if (not isinstance(segment, str) or not segment.startswith("segment-")
+                        or Path(segment).name != segment or provenance.get("session_id") != trial["session_id"]
+                        or provenance.get("model") != trial["model"] or provenance.get("rep") != trial["rep"]
+                        or provenance.get("log_dir") != str(expected_dir)):
+                    raise ValueError("engine segment provenance mismatch")
+                saved_segment = storage.load(root / expected_dir / "segment.json")
+                if any(saved_segment.get(k) != v for k, v in provenance.items()):
+                    raise ValueError("engine segment receipt mismatch")
+                if trial["kind"] in {"loaded_idle", "inference"} and result["adapter"].get("trial_width_policy", {}).get("submission_width") != trial["batch_size"]:
+                    raise ValueError("actual trial width policy mismatch")
             task = _native_task(trial, cfg, dataset_info, plan["train_count"])
             if result.get("native_task") != task:
                 raise ValueError("saved native task differs from deterministic task")
@@ -798,7 +978,8 @@ def verify_plan(root: Path, plan: dict, data: tuple) -> dict:
                     raise ValueError("saved prediction audit differs from exported metrics")
                 if prediction_info.get("rows") != actual_counts["submitted"]:
                     raise ValueError("prediction row metadata mismatch")
-                if _audit_kind(cfg, trial) == "qev-packed":
+                if (_audit_kind(cfg, trial) == "qev-packed" or
+                        (plan.get("format_version") == 2 and trial["adapter"] == "qev")):
                     context = result["outside_window_s"]["context_preflight"]
                     expected = [(split, i, len(group)) for split, rows in (("test", data[4]), ("warmup", data[5]))
                                 for i, group in enumerate(workload.groups(rows, trial["batch_size"]))]
@@ -828,6 +1009,11 @@ def verify_plan(root: Path, plan: dict, data: tuple) -> dict:
         expected_derived = _derived_from_results(trial, results)
         if results[run_id].get("derived") != expected_derived:
             inconsistencies.append(f"{run_id}: derived energy intensity mismatch")
+        if plan.get("format_version") == 2 and trial["kind"] == "inference":
+            baseline = results.get(trial.get("loaded_idle_run_id")) or {}
+            expected_segment = baseline.get("adapter", {}).get("engine_session")
+            if results[run_id].get("adapter", {}).get("loaded_idle_engine_session") != expected_segment:
+                inconsistencies.append(f"{run_id}: loaded idle segment provenance mismatch")
         if trial["kind"] == "inference" and not results[run_id]["gate"]["meets_minimum_window"]:
             gate = results[run_id]["gate"]
             low_sampling.append({"run_id": run_id, "window_ratio": gate["window_ratio"],
@@ -912,6 +1098,8 @@ def main(argv: Iterable[str] | None = None) -> int:
             print(json.dumps(report, indent=2, allow_nan=False))
             return 0 if report["ok"] else 1
         if args.command == "run":
+            if cfg.get("execution_protocol") != "engine-session-v1":
+                raise ValueError("archived configurations are read/verify only; run requires engine-session-v1")
             with storage.measurement_lock(LOCK), _signal_handlers():
                 plan = ensure_plan(root, cfg, dataset_info, len(train))
                 selected = select_trials(

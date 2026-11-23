@@ -9,7 +9,7 @@
   "energy": {
     "country_iso_code": "FRA",
     "gpu_ids": [0],
-    "sample_secs": 1,
+    "sample_secs": 0.2,
     "min_samples": 5
   },
   "models": {
@@ -68,7 +68,8 @@
         "debug": false,
         "init_timeout_s": 1800,
         "request_timeout_s": 300,
-        "close_timeout_s": 10
+        "close_timeout_s": 10,
+        "request_mode": "packed"
       },
       "engine_safety": {
         "weight_shards_bytes": {
@@ -136,7 +137,8 @@
         "debug": false,
         "init_timeout_s": 1800,
         "request_timeout_s": 300,
-        "close_timeout_s": 10
+        "close_timeout_s": 10,
+        "request_mode": "packed"
       },
       "engine_safety": {
         "weight_shards_bytes": {
@@ -211,7 +213,8 @@
         "debug": false,
         "init_timeout_s": 1800,
         "request_timeout_s": 300,
-        "close_timeout_s": 10
+        "close_timeout_s": 10,
+        "request_mode": "packed"
       },
       "engine_safety": {
         "weight_shards_bytes": {
@@ -312,58 +315,24 @@
     }
   },
   "phases": {
-    "gpu_pilot": {
-      "model_ids": ["qwen2b", "joey1"],
-      "batch_sizes": [1, 16],
-      "seed": 1729,
-      "sample_size": 49,
-      "warmup_rows": 17,
-      "repetitions": 1,
-      "passes": {
-        "qwen2b": {"1": 3, "16": 2},
-        "joey1": {"1": 3}
-      },
-      "device_idle_s": 8,
-      "loaded_idle_s": 12,
-      "loaded_idle_adapters": ["qwen2b", "joey1"],
-      "measure_training": false,
-      "settle_s": 5
-    },
-    "cpu_pilot": {
-      "model_ids": ["svm", "nb", "fasttext"],
-      "batch_sizes": [1, 16],
-      "seed": 1729,
-      "sample_size": 65,
-      "warmup_rows": 17,
-      "repetitions": 1,
-      "passes": {
-        "svm": {"1": 450, "16": 4000},
-        "nb": {"1": 450, "16": 4000},
-        "fasttext": {"1": 1000, "16": 1000}
-      },
-      "device_idle_s": 8,
-      "loaded_idle_s": 12,
-      "loaded_idle_adapters": ["svm", "nb", "fasttext"],
-      "measure_training": true,
-      "settle_s": 5
-    },
     "full": {
+      "execution_protocol": "engine-session-v1",
       "model_ids": ["qwen2b", "joey1", "qwen9b", "elephant1", "qwen27b", "mammoth1", "svm", "nb", "fasttext"],
-      "batch_sizes": [1, 16],
+      "batch_sizes": [1, 16, 64],
       "seed": 1729,
       "sample_size": 257,
       "warmup_rows": 17,
       "repetitions": 3,
       "passes": {
-        "qwen2b": {"1": 2, "16": 4},
-        "joey1": {"1": 1},
-        "qwen9b": {"1": 2, "16": 4},
-        "elephant1": {"1": 1},
-        "qwen27b": {"1": 2, "16": 4},
-        "mammoth1": {"1": 1},
-        "svm": {"1": 200, "16": 1200},
-        "nb": {"1": 200, "16": 1200},
-        "fasttext": {"1": 1000, "16": 1000}
+        "qwen2b": {"1": 2, "16": 4, "64": 4},
+        "joey1": {"1": 1, "16": 4, "64": 4},
+        "qwen9b": {"1": 2, "16": 4, "64": 4},
+        "elephant1": {"1": 1, "16": 4, "64": 4},
+        "qwen27b": {"1": 2, "16": 4, "64": 4},
+        "mammoth1": {"1": 1, "16": 4, "64": 4},
+        "svm": {"1": 200, "16": 1200, "64": 1200},
+        "nb": {"1": 200, "16": 1200, "64": 1200},
+        "fasttext": {"1": 1750, "16": 1750, "64": 1750}
       },
       "device_idle_s": 8,
       "loaded_idle_s": 12,

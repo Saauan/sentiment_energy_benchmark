@@ -13,6 +13,7 @@ measurements and [README.md](README.md) for setup and reproduction commands.
 | Quality denominator | First pass only; later passes measure repeat disagreement |
 | Experimental unit | One measured run/repetition, not a tweet or pass |
 | Execution | Validated setup: measure directly; new host or relevant runtime/meter change: targeted readiness check |
+| Execution protocol | `engine-session-v1`: one engine process per model per repetition, widths run inside it in seed-determined order; model order is seed-determined within each repetition, not blocked by model |
 | Measurement boundary | CodeCarbon CPU/GPU/RAM with PUE 1; no wall-meter claim |
 
 ## 1. Objective and estimand
@@ -82,12 +83,12 @@ Review TweetEval terms before redistribution.
 
 ### 2.3 Models and engines
 
-| Family | Systems | Runtime | Baseline independent width |
+| Family | Systems | Runtime | Configured widths (1, 16, 64) |
 |---|---|---|---|
-| Traditional | TF–IDF + linear SVM; TF–IDF + multinomial NB | scikit-learn 1.9.1, from-scratch train-split fit | Static groups 1 and 16 |
-| Small neural | fastText | fasttext-wheel 0.9.2, single thread, no pretrained vectors or autotuning | Static groups 1 and 16 |
-| Generative | Qwen3.5 2B, 9B, conditionally 27B | vLLM 0.19.0, BF16, deterministic one-label generation | Closed-loop requests 1 and 16 |
-| Decision | Joey-1, Elephant-1, conditionally Mammoth-1 | Pinned local snapshot in patched OneJev QEV | 1 |
+| Traditional | TF–IDF + linear SVM; TF–IDF + multinomial NB | scikit-learn 1.9.1, from-scratch train-split fit | Static groups 1, 16, 64 |
+| Small neural | fastText | fasttext-wheel 0.9.2, single thread, no pretrained vectors or autotuning | Static groups 1, 16, 64 |
+| Generative | Qwen3.5 2B, 9B, 27B | vLLM 0.19.0, BF16, deterministic one-label generation | Closed-loop requests 1, 16, 64, scheduler cap 16 |
+| Decision | Joey-1, Elephant-1, Mammoth-1 | Pinned local snapshot in patched OneJev QEV | Packed requests 1, 16, 64 |
 
 Exact checkpoint revisions:
 
@@ -120,9 +121,10 @@ The primary condition fixes:
 - no complete-input or prediction cache across repetitions.
 
 Closed-loop groups finish before the next group starts; final partial groups
-remain visible. The `gpu_widths` extension uses client bursts of 1, 4, 16, 64,
-and 256 with the same scheduler cap of 16. Wider bursts can queue: they are not
-wider GPU batches or evidence of simultaneous execution.
+remain visible. The active protocol uses client bursts of 1, 16, and 64 with the
+same scheduler cap of 16; the historical `gpu_widths` sweep also used 4 and
+256. Wider bursts can queue: they are not wider GPU batches or evidence of
+simultaneous execution.
 
 Any cache, thinking, precision, quantization, GPU-topology, or engine change is
 a separate condition.
@@ -145,10 +147,12 @@ The baseline structured choice uses:
 - one independent tweet per request. Batching question branches for one state
   is not independent-tweet batching.
 
-The `gpu_widths` extension instead opts Joey into **packed requests**: one
-shared, numbered tweet list with one targeted choice question per tweet.
-Singleton groups retain the baseline request. QEV may batch or chunk branches
-within an envelope, but does not batch independent states.
+The active protocol opts all pinned QEV siblings (Joey-1, Elephant-1,
+Mammoth-1) into **packed requests**: one shared, numbered tweet list with one
+targeted choice question per tweet, at widths 1, 16, and 64. Singleton groups
+retain the baseline request. QEV may batch or chunk branches within an envelope,
+but does not batch independent states. The historical `gpu_widths` sweep packed
+Joey only.
 
 Packing places other tweets in every answer's context, so it can change quality.
 It is a distinct workload, not a transparent speedup. Exact tokenizer checks
@@ -162,42 +166,51 @@ primary conditions.
 
 ## 3. Workloads and experimental units
 
-### 3.1 Phases and fixed pass counts
+### 3.1 Phases and configured pass counts
 
-The selected JSON configuration is authoritative. The named `gpu_pilot` and
-`cpu_pilot` phases are legacy definitions, not required execution steps. Their
-profiles, artifacts, and findings remain historical engineering evidence, not
-prerequisites or quantitative results. Initial values in `experiment.json`
-are:
+The selected JSON configuration is authoritative. The active phase is `full`
+with `execution_protocol='engine-session-v1'` under the existing
+`schema_version`:
 
-| Phase | Models | Panel | Reps | Initial inference passes, width 1 / 16 |
-|---|---|---:|---:|---|
-| `gpu_pilot` | Qwen 2B + Joey-1 | 49 | 1 | Qwen: 3/2; Joey: 3/unsupported |
-| `cpu_pilot` | SVM, NB, fastText | 65 | 1 | SVM/NB: 450/4000; fastText: 1000/1000 |
-| `full` | Nine systems, subject to fit/support skips | 257 | 3 | vLLM: 2/4; QEV: 1/unsupported; SVM/NB: 200/1200; fastText: 1000/1000 |
+| Phase | Status | Models | Panel | Reps | Widths |
+|---|---|---|---:|---:|---|
+| `full` | Active protocol | Nine systems, subject to fit/support skips | 257 | 3 | 1, 16, 64 |
+| `gpu_pilot` | Legacy, historical | Qwen 2B + Joey-1 | 49 | 1 | 1, 16 |
+| `cpu_pilot` | Legacy, historical | SVM, NB, fastText | 65 | 1 | 1, 16 |
 
-Pass counts are nested by model and stringified width. Choose them for
-measurable windows and fix them before execution; never tune them afterward to
-improve a result.
+The named `gpu_pilot` and `cpu_pilot` phases are legacy definitions, not
+required execution steps. Their profiles, artifacts, and findings remain
+historical engineering evidence, not prerequisites or quantitative results.
 
-Initial energy/calibration settings:
+Pass counts are nested by model and stringified width in the selected
+configuration. Choose them for measurable windows and fix them before
+execution; never tune them afterward to improve a result. Historical pass
+counts were fixed for widths 1 and 16 and are not evidence for the width-64
+condition.
 
-| Setting | Initial value |
+Configured energy/calibration settings (resolved values and actual durations
+are recorded per attempt):
+
+| Setting | Value |
 |---|---|
 | Country / GPUs | `country_iso_code=FRA`, `gpu_ids=[0]` |
-| Sampling | `sample_secs=1`, `min_samples=5` |
-| Device idle / loaded idle / settling | 8 s / 12 s / 5 s |
+| Sampling | `sample_secs` and `min_samples` as configured (active config: isolated tracker at 0.2 s, 5 samples) |
+| Device idle / loaded idle / settling | As configured (active config: 8 s / 12 s / 5 s) |
 
-Resolved values and actual durations are recorded per attempt. Classical
-loaded-idle adapter names do not create a loaded-idle trial.
+Classical loaded-idle adapter names do not create a loaded-idle trial.
 
-Profile provenance remains explicit:
+Profile provenance is historical and read-only:
 
-- `profiles/laptop-full-isolated-02.json`: reported full-run condition with an
-  isolated tracker at 0.2 s and 1,750 fastText passes at each width.
-- `profiles/laptop-cpu-isolated-02.json`: historical engineering profile with
-  the same isolated sampler and cadence, not a prerequisite or result.
-- `profiles/laptop-gpu-widths.json`: authoritative follow-up width settings.
+- `profiles/laptop-full-isolated-02.json`: frozen reported full-run condition.
+- `profiles/laptop-cpu-isolated-02.json`: historical engineering profile.
+- `profiles/laptop-gpu-widths.json`: historical ten-condition sweep, never
+  re-executed or pooled with the engine-session protocol.
+- `profiles/legacy-experiment.json`: frozen legacy-format configuration without
+  `execution_protocol`, kept for historical read/verify and configuration
+  checks.
+
+Versions, hashes, and published artifacts of these profiles are immutable, and
+there is no runtime toggle back to their execution protocol.
 
 Timing/metering changes use distinct artifact roots and do not tune labels or
 prompts. Width 1 is the common primary workload. Persist actual group
@@ -209,10 +222,24 @@ A measured run/repetition is the energy experimental unit. Tweets and repeated
 passes within it are not independent energy replicates. Retain every repetition
 and summarize run-level variation.
 
-The runner interleaves model/width/repetition blocks deterministically by
-`SHA256(seed, condition)`, with condition as tie-breaker, and records the order
-in `plan.json`. Within a block, dependency order remains device idle → training
-where applicable → loaded idle → inference.
+Order is seed-determined and recorded in `plan.json`. Under
+`engine-session-v1` the plan describes sessions keyed by model and repetition:
+repetitions ascend, and model order within a repetition and width order within a
+session are seeded. A configuration without `execution_protocol` remains a
+historical plan: readable and verifiable, but `run` refuses it.
+
+Within a repetition, one engine session per model starts in a fresh process. It
+covers one unloaded idle baseline (no batch width) before setup, shared by all
+widths of the session; one measured classical training/setup trial where
+configured, likewise shared; then, per width, an optional loaded-idle trial
+followed by inference. Widths stay separate conditions; the shared session does
+not make their results poolable or ordered by speed. Engine startup capacity
+never defines a measured width; the width is applied explicitly per condition.
+
+The plan links each trial to its session and dependencies, and records the
+realised width order. Adapter output is segment-scoped: a fresh log segment per
+process or resume, with its own segment provenance. Results link session,
+segment, log directory, and the realised width policy.
 
 Record actual order, clocks, temperatures, power limits, and background state
 where observable. Seeded interleaving reduces, but does not eliminate, order,
@@ -230,10 +257,13 @@ thermal, and temporal confounding.
    unsupported GPU visibility or competing work; record exact skips.
 4. Never silently quantize, offload, lower precision, substitute a checkpoint,
    or change hardware. An explicit alternative is a new condition.
-5. Inspect engine logs and adapter metadata. After loading, warm up every model
-   and supported width with validation rows; record workload, duration,
-   stabilization, and cache state. Apply the section 9 readiness rule rather
-   than a mandatory pilot sequence.
+5. Inspect engine logs and adapter metadata. After loading a session, warm up
+   every configured width with validation rows and the configured settle
+   period; record workload, duration, stabilization, and cache state. Apply the
+   section 9 readiness rule rather than a mandatory pilot sequence.
+6. GPU checks before and after each measured window exclude the run's own
+   adapter process group. Foreign compute prevents the trial from completing.
+   These are point-in-time checks, not continuous interference monitoring.
 
 Warmup is excluded from steady-state energy and quality. Model loading and cold
 start are outside the primary boundary, not zero-energy events.
@@ -274,6 +304,17 @@ are never overwritten or silently repeated. Retries use fresh `attempt-NNNN`
 directories; failed and skipped states require explicit retry flags. Preserve
 all logs and native artifacts.
 
+Resume continues the same session in a fresh log segment, so segment provenance
+distinguishes processes. Completed trials are immutable. A resumed segment
+may reuse a completed calibration from the same planned session; the loaded
+idle's segment is linked explicitly. A previously measured classical pipeline
+is fitted again outside measurement if it must be rebuilt on resume.
+
+A QEV over-context envelope skips only that width's loaded-idle/inference
+pair. A fatal engine failure stops the session: the active trial records its
+failure or fit skip, and remaining dependent trials are skipped. No completed
+trial is rewritten.
+
 ## 5. Energy measurements and calibration
 
 ### 5.1 Gross component energy
@@ -309,12 +350,15 @@ E_{device-adjusted} = \frac{3{,}600{,}000}{N_{submitted}}
 \frac{T_{gross}}{T_{device}}\right).
 \]
 
-`loaded_idle` loads the specified model/runtime but submits no inference. Apply
-analogous duration-scaled subtraction and label it
+`loaded_idle` measures the already-loaded engine without submitting inference.
+Apply analogous duration-scaled subtraction and label it
 `loaded_idle_adjusted_j_per_tweet`.
 
 - Never substitute device idle for loaded idle or pool baselines across models,
   engines, hosts, GPU sets, or source signatures.
+- One unloaded `device_idle` (no batch width) per model/repetition serves every
+  width in that session; `loaded_idle` is measured per width only where
+  configured. A baseline never crosses sessions, repetitions, or models.
 - Without a compatible baseline, adjusted energy is null.
 - Retain signed values; negative results can expose mismatch or noise and must
   not be clipped.
@@ -328,6 +372,11 @@ from inference and tuning. Record rows, parameters, threads, duration, and
 native artifacts. Qwen/decision pretraining is outside the boundary or
 unavailable, never zero. Include training in an inference ratio only under an
 explicit amortization assumption.
+
+A classical model/repetition is fitted once and reused across that session's
+widths, analogous to one GPU engine session. The training trial is shared
+reference work, not duplicated or re-counted per width; each width trial links
+the shared trial.
 
 ## 6. Quality and performance
 
@@ -373,12 +422,12 @@ fallback. Report p50/p95 with scope and completed-request basis.
 Valid throughput may use `N_valid` only with an explicit label. Training's
 legacy `throughput_tweets_s` contains training rows/s, not tweet throughput.
 
-For the GPU width sweep:
+For the width comparisons at 1, 16, and 64:
 
 - compare engines using group p95, one observation per closed-loop group;
 - do not repeat packed-request latency for every output;
 - report independent HTTP request p95 separately for vLLM;
-- show final partial groups and scheduler settings.
+- show final partial groups, scheduler settings, session order, and width order.
 
 ## 7. Native BoAmps export and verification
 
@@ -390,7 +439,7 @@ Request-count rules:
 
 - Calibration and training use native `nbRequest=0`; inference may not replace
   a missing count with zero.
-- Packed Joey counts request envelopes, including final partial groups, not
+- Packed QEV counts request envelopes, including final partial groups, not
   tweet decisions. The verifier checks envelope receipts in predictions.
 - Gross and adjusted J/tweet still divide by submitted tweets.
 - In vLLM, request and tweet counts coincide.
@@ -423,7 +472,8 @@ units and be documented separately.
 ## 8. Analysis and reporting
 
 - Analyze one phase root at a time; label any deliberate join.
-- Keep phase, kind, model, width, repetition, host, engine, and condition.
+- Keep phase, kind, model, width, repetition, session, segment, host, engine,
+  and condition.
 - Include failed/incomplete artifacts and skips in status reports. Successful
   figures require a readable active result and complete state.
 - Preserve run-level variation; never treat tweets or passes as independent
@@ -438,8 +488,8 @@ units and be documented separately.
 
 ## 9. Acceptance sequence
 
-The named `gpu_pilot` and `cpu_pilot` phases are not mandatory. Use one
-readiness rule:
+The named `gpu_pilot` and `cpu_pilot` phases are historical. Use this readiness
+rule for the active engine-session protocol:
 
 - **Validated setup:** proceed directly to the intended measurement.
 - **New host or relevant runtime/meter change:** run a short readiness check
@@ -457,10 +507,15 @@ The readiness check must establish that:
 3. Configuration, input integrity, native export, and prediction audits pass
    for the affected path. Static tests and weight-byte preflight alone do not
    establish runtime or measurement readiness.
+4. A session loads its model once and serves every configured width, and each
+   width's shortest window samples adequately. Fit and sampling evidence for the
+   new widths remain future checks: they are not inherited from width 1 or 16,
+   and not from a historical sweep.
 
-Every measured run retains its unloaded (`device_idle`) and applicable
-model-loaded (`loaded_idle`) calibrations as analysis baselines; these are not
-pilots. Complete the artifact verification in section 7 before reporting.
+Every session retains its unloaded (`device_idle`) calibration and every
+configured width its applicable model-loaded (`loaded_idle`) calibration as
+analysis baselines; these are not pilots. Complete the artifact verification in
+section 7 before reporting.
 
 ## 10. Limitations and threats to validity
 
@@ -477,10 +532,11 @@ pilots. Complete the artifact verification in section 7 before reporting.
    and signature matching do not remove temporal, thermal, or loaded-baseline
    mismatch.
 5. **Workload equivalence.** Static CPU groups, independent vLLM bursts,
-   baseline QEV choices, and packed Joey envelopes have different scheduling,
+   baseline QEV choices, and packed QEV envelopes have different scheduling,
    context, and readout semantics. Client width does not prove hardware batching.
-6. **Dependence and order.** Repeated passes share tweets and a run. Seeded
-   interleaving cannot remove thermal, drift, or within-block dependencies.
+6. **Dependence and order.** Repeated passes, widths of one session, and runs
+   share tweets and process state. Seeded interleaving and per-session width
+   ordering cannot remove thermal, drift, or within-session dependencies.
 7. **Baseline fidelity and tuning.** SVM and fastText are variants, not exact
    published baselines; no validation tuning is performed.
 8. **Panel generalization.** Fixed subsets of 49/65/257 tweets support controlled
@@ -499,3 +555,8 @@ pilots. Complete the artifact verification in section 7 before reporting.
     interchangeable; packed and independent requests need distinct reporting.
 14. **Repeat quality.** First-pass scoring avoids label pooling but does not
     characterize all repeat variability; report disagreements separately.
+15. **Session sharing.** One engine process, one unloaded idle, and one classical
+    fit serve several widths. This is by design and keeps reload/refit work out
+    of the measured window; it is not a measured speedup or energy saving, and
+    it means widths share allocator state, caches, and thermal history. A
+    session-scoped baseline is not evidence for another session or model.

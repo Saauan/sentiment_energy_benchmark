@@ -6,6 +6,12 @@ downloads weights. Paths deliberately remain relative in the returned mapping.
 The runner must normalize them against its project root at runtime, preserving
 virtual-environment interpreter symlinks with ``os.path.abspath`` rather than
 ``Path.resolve``.
+
+A phase may declare ``execution_protocol`` (see :data:`EXECUTION_PROTOCOL`).
+The key is optional so that historical configurations stay byte-identical and
+resolvable for verification: this module never refuses a phase, it only reports
+what the phase declares. Deciding whether a resolved configuration may be
+executed is the runner's job (an absent protocol means verification only).
 """
 from __future__ import annotations
 
@@ -37,6 +43,11 @@ REQUESTED_WIDTHS = (1, 4, 16, 64, 256)
 _SUPPORTED_BATCHES = {"vllm": REQUESTED_WIDTHS, "qev": (1,)}
 _PACKED_SUPPORTED_BATCHES = REQUESTED_WIDTHS
 _QEV_REQUEST_MODES = {"single", "packed"}
+# The only execution protocol this configuration vocabulary understands. It is a
+# phase-level opt-in: a phase that omits it describes a historical stage that may
+# still be resolved and verified, but not executed by the runner.
+EXECUTION_PROTOCOL = "engine-session-v1"
+_EXECUTION_PROTOCOLS = {EXECUTION_PROTOCOL}
 REVISION = re.compile(r"[0-9a-f]{40}\Z")
 
 _TOP_KEYS = {"schema_version", "dataset", "energy", "models", "phases"}
@@ -44,6 +55,10 @@ _PHASE_KEYS = {
     "model_ids", "batch_sizes", "seed", "sample_size", "warmup_rows", "repetitions",
     "passes", "device_idle_s", "loaded_idle_s", "loaded_idle_adapters", "measure_training", "settle_s",
 }
+# Optional phase keys. ``execution_protocol`` is validated when present and
+# propagated to the resolved mapping only then, so historical configurations keep
+# their exact resolved shape and therefore their hashes.
+_OPTIONAL_PHASE_KEYS = {"execution_protocol"}
 _ENERGY_KEYS = {"country_iso_code", "gpu_ids", "sample_secs", "min_samples"}
 _COMMON_MODEL_KEYS = {"adapter", "device", "params"}
 _HUB_MODEL_KEYS = _COMMON_MODEL_KEYS | {"repo", "revision", "local_snapshot", "engine_safety"}
@@ -105,6 +120,18 @@ def supported_batches(spec):
                 return _PACKED_SUPPORTED_BATCHES
         return _SUPPORTED_BATCHES[kind]
     raise ValueError(f"unsupported adapter for supported_batches: {kind!r}")
+
+
+def may_execute(cfg):
+    """Return whether a resolved phase declares a runnable execution protocol.
+
+    Historical configurations deliberately resolve so their pins and roots stay
+    verifiable; only a phase that declares :data:`EXECUTION_PROTOCOL` may be
+    executed. The runner owns the refusal decision; this is the single source of
+    truth for it, so no caller has to hardcode the protocol string.
+    """
+    protocol = _mapping(cfg, "resolved configuration").get("execution_protocol")
+    return isinstance(protocol, str) and not isinstance(protocol, bool) and protocol in _EXECUTION_PROTOCOLS
 
 
 def _exact_keys(value, allowed, name, *, required=()):
@@ -313,8 +340,21 @@ def _validate_models(models, manifest):
             raise ValueError(f"models.{model_id}.adapter is unsupported: {kind!r}")
 
 
+def _validate_execution_protocol(name, phase):
+    if "execution_protocol" not in phase:
+        return None
+    protocol = phase["execution_protocol"]
+    if not isinstance(protocol, str) or protocol not in _EXECUTION_PROTOCOLS:
+        raise ValueError(
+            f"phases.{name}.execution_protocol must be {sorted(_EXECUTION_PROTOCOLS)} when present; "
+            "omit it for a historical phase that is verification-only"
+        )
+    return protocol
+
+
 def _validate_phase(name, phase, models):
-    _exact_keys(phase, _PHASE_KEYS, f"phases.{name}", required=_PHASE_KEYS)
+    _exact_keys(phase, _PHASE_KEYS | _OPTIONAL_PHASE_KEYS, f"phases.{name}", required=_PHASE_KEYS)
+    _validate_execution_protocol(name, phase)
     model_ids = phase["model_ids"]
     if not isinstance(model_ids, list) or not model_ids or len(set(model_ids)) != len(model_ids):
         raise ValueError(f"phases.{name}.model_ids must be a nonempty unique list")
@@ -384,13 +424,17 @@ def configure(phase, config_path=DEFAULT_CONFIG):
     adapter cannot serve (see :func:`supported_batches`) stays in ``batch_sizes``
     and is deliberately absent from that model's ``passes``; the runner must
     record it as skipped/unsupported rather than removing it from the phase.
+
+    ``execution_protocol`` appears in the result only when the phase declares it.
+    An absent key means the caller resolved a historical configuration: it stays
+    usable for verification, and refusing to execute it is the runner's decision.
     """
     document = _document(Path(config_path))
     if phase not in document["phases"]:
         raise ValueError(f"unknown phase {phase!r}; choose from {sorted(document['phases'])}")
     selected = document["phases"][phase]
     model_ids = selected["model_ids"]
-    return deepcopy({
+    resolved = deepcopy({
         "phase": phase,
         "dataset": document["dataset"],
         "models": {model_id: document["models"][model_id] for model_id in model_ids},
@@ -407,3 +451,6 @@ def configure(phase, config_path=DEFAULT_CONFIG):
         "measure_training": selected["measure_training"],
         "settle_s": selected["settle_s"],
     })
+    if "execution_protocol" in selected:
+        resolved["execution_protocol"] = selected["execution_protocol"]
+    return resolved
